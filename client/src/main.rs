@@ -22,6 +22,11 @@ fn main() {
         server_port = args[3].parse::<u16>().expect("Invalid port number.");
     }
 
+    // Create Socket
+    let socket = UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0)).expect("Failed to bind to address.");
+
+    let server_address = format!("{}:{}", server_ip, server_port);
+    socket.connect(server_address).expect("Failed to connect to server.");
     println!("Hello, world!");
     println!("{}", username);
     println!("{}", server_ip);
