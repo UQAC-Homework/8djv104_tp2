@@ -19,7 +19,7 @@ fn main() {
     }
 
     if args_len > 3 {
-        server_port = args[3].parse::<u16>().unwrap();
+        server_port = args[3].parse::<u16>().expect("Invalid port number.");
     }
 
     println!("Hello, world!");
