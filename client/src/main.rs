@@ -1,5 +1,5 @@
 use std::env;
-use std::net;
+use std::net::UdpSocket;
 
 fn main() {
     // Parse arguments
@@ -23,12 +23,14 @@ fn main() {
     }
 
     // Create Socket
-    let socket = UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0)).expect("Failed to bind to address.");
+    let socket =
+        UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0)).expect("Failed to bind to address.");
 
     let server_address = format!("{}:{}", server_ip, server_port);
-    socket.connect(server_address).expect("Failed to connect to server.");
-    println!("Hello, world!");
-    println!("{}", username);
-    println!("{}", server_ip);
-    println!("{}", server_port);
+    socket
+        .connect(server_address)
+        .expect("Failed to connect to server.");
+
+    // Send username as first message
+    socket.send(username.as_bytes()).expect("Failed to send username.");
 }
