@@ -43,7 +43,7 @@ Packet sent by the client to the server to request a connection.
 | Unused   | 4 bits   | Unused bits                                                             |
 
 The field `Length` is offset by 1. For a username of length `1`, the length will be `0x0`. This allows the username to
-be of length `16`, while still fitting inside a nybble. This isn't an issue, since usernames of length `0` are not
+be of length `16`, while still fitting inside a nybble. Usernames of length `0` are not
 allowed.
 
 The field `Username` is written on alternating bytes. The first nybble of a character are written as the lower half of
