@@ -2,19 +2,7 @@
 #include <iostream>
 #include <sstream>
 #include <unordered_map>
-
-#if defined(_WIN32)
-#include <winsock2.h>
-#pragma comment(lib, "ws2_32.lib")
-using SOCKET_LENGTH = int;
-#else
-#include <unistd.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-using SOCKET = int;
-using SOCKET_LENGTH = socklen_t;
-#define INVALID_SOCKET (-1)
-#endif
+#include "include/socket.h"
 
 namespace
 {
@@ -34,49 +22,14 @@ int main(const int argc, char* argv[])
 		server_port = strtol(argv[1], nullptr, 10);
 
 	// Set up
-#if defined(_WIN32)
-	WSADATA wsaData;
-
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-	{
-		perror("WSAStartup failed.");
-		return 1;
-	}
-#endif
+	initialize_socket();
 
 	// Create socket
-	const SOCKET socket = ::socket(
-		// IPv4 Internet protocols
-		AF_INET,
-
-		// Supports datagrams
-		SOCK_DGRAM,
-
-		// UDP datagram sockets
-		IPPROTO_UDP
-	);
-
+	const SOCKET socket = create_socket(server_port);
+	
 	if (socket == INVALID_SOCKET)
 	{
 		perror("Failed to create a socket.");
-		return 1;
-	}
-
-	sockaddr_in server_address{};
-	server_address.sin_family = AF_INET;
-	server_address.sin_port = htons(server_port);
-	server_address.sin_addr.s_addr = htonl(INADDR_ANY);
-
-	// Bind socket to address
-	const auto bind_error_code = bind(
-		socket,
-		reinterpret_cast<struct sockaddr*>(&server_address),
-		sizeof(server_address)
-	);
-
-	if (bind_error_code != 0)
-	{
-		perror("Failed to bind the socket to an address.");
 		return 1;
 	}
 
@@ -152,12 +105,7 @@ int main(const int argc, char* argv[])
 	}
 
 	// Close socket
-#if defined(_WIN32)
-	closesocket(socket);
-	WSACleanup();
-#else
-	close(socket);
-#endif
+	close_socket(socket);
 
 	return 0;
 }
