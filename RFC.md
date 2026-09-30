@@ -49,6 +49,8 @@ allowed.
 The field `Username` is written on alternating bytes. The first nybble of a character are written as the lower half of
 the first byte, and the last nybble of a character are written as the upper half of the second byte.
 
+#### Examples
+
 Example of a packet:
 
 ```
@@ -61,13 +63,15 @@ Example of a packet:
 Example of how the username "Player" is found:
 
 ```
-Raw: 55 06 c6 17 96 57 20
-Nybbles: 5 5 0 6 c 6 1 7 9 6 5 7 2 0
+Raw: 01 55 06 c6 17 96 57 20
+Nybbles: 0 1 5 5 0 6 c 6 1 7 9 6 5 7 2 0
 Grouped Nybbles:
+	- Type: 0 1
 	- Length: 5
 	- Username: 5 0 6 c 6 1 7 9 6 5 7 2
 	- Unused: 0
 
+Type: 1
 Length: 5 -> 6
 Username:
 	5 0 6 c 6 1 7 9 6 5 7 2
