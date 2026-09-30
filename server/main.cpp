@@ -79,7 +79,7 @@ int main(const int argc, char* argv[])
 
 		if (packet_type == CONNECTION)
 		{
-			const auto username = unpack_connection(buffer);
+			const auto username = unpack_connection(buffer, 1);
 
 			std::string message = "User '" + username + "' has joined the room.";
 

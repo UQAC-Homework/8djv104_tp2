@@ -2,23 +2,27 @@
 #define SERVER_PACKETS_H
 #include <string>
 
-#include "../PacketType.h"
-
-inline std::string unpack_connection(const char* buffer)
+/**
+ * Unpacks the given data as a @ref PacketType::Connection from the given offset
+ * 
+ * @param buffer Raw packet bytes
+ * @param offset Position of the first data byte
+ * 
+ * @return The decoded username
+ */
+inline std::string unpack_connection(const char* buffer, int offset)
 {
-	int index = sizeof(PacketType) / sizeof(char);
-
-	const unsigned char length = (buffer[index] >> 4) + 1;
+	const unsigned char length = (buffer[offset] >> 4) + 1;
 	char username[length];
 
 	for (int i = 0; i < length; i++)
 	{
-		const unsigned char left = buffer[index];
-		const unsigned char right = buffer[index + 1];
+		const unsigned char left = buffer[offset];
+		const unsigned char right = buffer[offset + 1];
 
 		const char c = static_cast<char>((left & 0b1111) << 4 | (right >> 4));
 		username[i] = c;
-		index++;
+		offset++;
 	}
 
 	return username;
