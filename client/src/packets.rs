@@ -31,7 +31,5 @@ pub fn send_connection(socket: &UdpSocket, username: &str) -> io::Result<usize> 
         index += 1;
     }
 
-    buffer[index] = content[length - 1] & 0b1111 << 4;
-
     socket.send(&buffer)
 }
