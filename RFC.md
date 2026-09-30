@@ -41,7 +41,33 @@ Packet sent by the client to the server to request a connection.
 | Length   | 4 bits   | Length of the username in bytes. **MUST** be offset by 1. A length of `1` is `0x0` while a length of `16` is `0xE`. |
 | Username | 128 bits |                                                                                                                     |
 
-The field `Length` is offset by 1. For an username of length `1`, the length will be `0x0`. This allows the username to be of length `16`, while still fitting inside 4 bits. This isn't an issue, since usernames of length `0` are not allowed.
+The field `Length` is offset by 1. For a username of length `1`, the length will be `0x0`. This allows the username to be of length `16`, while still fitting inside a nybble. This isn't an issue, since usernames of length `0` are not allowed.
+
+The field `Username` is written on alternating bytes. The first nybble of a character are written as the lower half of the first byte, and the last nybble of a character are written as the upper half of the second byte.
+
+Example of a packet:
+```
+01                 Type
+55                 Length + First nybble of Username
+06 c6 17 96 57     Username
+20                 Last nybble of Username + Unused
+```
+
+Example of how the username is found:
+```
+Raw: 55 06 c6 17 96 57 20
+Nybbles: 5 5 0 6 c 6 1 7 9 6 5 7 2 0
+Grouped Nybbles:
+	- Length: 5
+	- Username: 5 0 6 c 6 1 7 9 6 5 7 2
+	- Unused: 0
+
+Length: 5 -> 6
+Username:
+	5 0 6 c 6 1 7 9 6 5 7 2
+	50 6c 61 79 65 72
+	P  l  a  y  e  r
+```
 
 ## Machines à états
 
