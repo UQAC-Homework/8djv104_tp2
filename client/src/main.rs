@@ -2,6 +2,21 @@ use std::env;
 use std::io;
 use std::io::Write;
 use std::net::UdpSocket;
+use std::sync::Arc;
+use std::thread;
+
+fn print_incoming_messages(socket: &UdpSocket) {
+    let buffer: &mut [u8] = &mut [0; 1024];
+
+    loop {
+        // Read from socket
+        let bytes_count = socket.recv(buffer).expect("TODO: panic message");
+
+        // Cut buffer
+        
+        println!("{}", String::from_utf8_lossy(buffer));
+    }
+}
 
 fn main() {
     // Parse arguments
@@ -38,6 +53,13 @@ fn main() {
         .send(username.as_bytes())
         .expect("Failed to send username.");
 
+    let socket = Arc::new(socket);
+    let recv_socket = Arc::clone(&socket);
+
+    let thread_receive_handle = thread::spawn(move || {
+        print_incoming_messages(&recv_socket);
+    });
+
     loop {
         // Get user message
         print!("> ");
@@ -61,4 +83,9 @@ fn main() {
             break;
         }
     }
+
+    // Close socket
+    // (Handled by Rust)
+
+    thread_receive_handle.join().expect("TODO: panic message");
 }
