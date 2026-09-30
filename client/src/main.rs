@@ -1,3 +1,5 @@
+mod packets;
+
 use std::env;
 use std::io;
 use std::io::Write;
@@ -13,7 +15,7 @@ fn print_incoming_messages(socket: &UdpSocket) {
         let bytes_count = socket.recv(buffer).expect("TODO: panic message");
 
         // Cut buffer
-        
+
         println!("{}", String::from_utf8_lossy(buffer));
     }
 }
@@ -49,9 +51,7 @@ fn main() {
         .expect("Failed to connect to server.");
 
     // Send username as first message
-    socket
-        .send(username.as_bytes())
-        .expect("Failed to send username.");
+    packets::send_connection(&socket, username).expect("Failed to send username.");
 
     let socket = Arc::new(socket);
     let recv_socket = Arc::clone(&socket);

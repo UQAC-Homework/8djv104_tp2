@@ -8,4 +8,6 @@ add_executable(server
         include/socket.h
         include/PacketType.h
         source/Logger.cpp
-        include/Logger.h)
+        include/Logger.h
+        include/serialization/packets.h
+        include/serialization/packets.h)

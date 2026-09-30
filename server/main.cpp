@@ -6,6 +6,7 @@
 #include "include/Logger.h"
 #include "include/PacketType.h"
 #include "include/socket.h"
+#include "include/serialization/packets.h"
 
 namespace
 {
@@ -73,6 +74,24 @@ int main(const int argc, char* argv[])
 		if (packet_type == UNDEFINED)
 		{
 			logger.log_error("Received an undefined packet type.");
+			continue;
+		}
+
+		if (packet_type == CONNECTION)
+		{
+			const auto username = unpack_connection(buffer);
+
+			std::string message = "User '" + username + "' has joined the room.";
+
+			// Send message to client
+			const auto _ = sendto(
+				socket,
+				message.c_str(),
+				message.length(),
+				0,
+				reinterpret_cast<const sockaddr*>(&client_address),
+				sizeof(client_address)
+			);
 			continue;
 		}
 
