@@ -1,4 +1,5 @@
 mod packets;
+mod packet_types;
 
 use std::env;
 use std::io;

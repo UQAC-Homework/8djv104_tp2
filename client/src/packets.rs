@@ -1,6 +1,7 @@
 use std::cmp::min;
 use std::io;
 use std::net::UdpSocket;
+use crate::packet_types::PacketType;
 
 /// Sends a connection packet
 pub fn send_connection(socket: &UdpSocket, username: &str) -> io::Result<usize> {
@@ -20,7 +21,7 @@ pub fn send_connection(socket: &UdpSocket, username: &str) -> io::Result<usize> 
 
     let mut buffer: [u8; 1024] = [0; 1024];
 
-    buffer[0] = 0x01;
+    buffer[0] = PacketType::Connection as u8;
     buffer[1] = (((length - 1) as u8 & 0b1111) << 4) | (content[0] >> 4);
 
     let mut index = 2;
