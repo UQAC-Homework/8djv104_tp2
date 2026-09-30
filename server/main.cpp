@@ -2,6 +2,9 @@
 #include <iostream>
 #include <sstream>
 #include <unordered_map>
+
+#include "include/Logger.h"
+#include "include/PacketType.h"
 #include "include/socket.h"
 
 namespace
@@ -26,12 +29,14 @@ int main(const int argc, char* argv[])
 
 	// Create socket
 	const SOCKET socket = create_socket(server_port);
-	
+
 	if (socket == INVALID_SOCKET)
 	{
 		perror("Failed to create a socket.");
 		return 1;
 	}
+
+	const auto logger = Logger{std::cerr};
 
 	char buffer[1024];
 	std::unordered_map<uint32_t, ClientInfo> clients;
@@ -56,6 +61,22 @@ int main(const int argc, char* argv[])
 			perror("Failed to read from socket.");
 			return 1;
 		}
+
+		if (received_bytes_count < 1)
+		{
+			logger.log_error("Failed to read the packet type.");
+			continue;
+		}
+
+		const auto packet_type = static_cast<PacketType>(buffer[0]);
+
+		if (packet_type == UNDEFINED)
+		{
+			logger.log_error("Received an undefined packet type.");
+			continue;
+		}
+
+		logger.log_error("Received a packet with an unsupported packet type.");
 
 		if (received_bytes_count < sizeof(buffer))
 			buffer[received_bytes_count] = '\0';

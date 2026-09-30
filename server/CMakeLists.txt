@@ -5,4 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_executable(server
         main.cpp
-        include/socket.h)
+        include/socket.h
+        include/PacketType.h
+        source/Logger.cpp
+        include/Logger.h)
