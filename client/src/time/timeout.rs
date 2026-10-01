@@ -19,9 +19,6 @@ impl Timeout {
 
     /// Checks if the given timeout has expired
     pub fn has_expired(&self) -> bool {
-        let now: Instant = Instant::now();
-        let end: Instant = self.start + self.duration;
-
-        end <= now
+        self.start.elapsed() >= self.duration
     }
 }
