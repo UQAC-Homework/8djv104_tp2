@@ -8,10 +8,10 @@ pub struct Timeout {
 
 impl Timeout {
     /// Creates a timeout with the given duration
-    pub fn create(duration: Duration) -> Timeout {
+    pub fn new(duration: Duration) -> Self {
         let now: Instant = Instant::now();
 
-        Timeout {
+        Self {
             start: now,
             duration,
         }
