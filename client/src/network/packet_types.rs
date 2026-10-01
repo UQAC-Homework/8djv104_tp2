@@ -4,8 +4,9 @@ pub enum PacketType {
     Undefined = 0x0,
     Connection = 0x1,
     ConnectionAccepted = 0x2,
-    ConnectionTerminate = 0x3,
-    // UNUSED = 0x4 - 0xF
+    ConnectionRejected = 0x3,
+    ConnectionTerminate = 0x4,
+    // UNUSED = 0x5 - 0xF
     Message = 0x10,
     // NACK = 0x11
     // UNUSED = 0x12 - 0x1F

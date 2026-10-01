@@ -1,6 +1,6 @@
-mod packets;
-mod packet_types;
+mod network;
 
+use network::packets;
 use std::env;
 use std::io;
 use std::io::Write;
