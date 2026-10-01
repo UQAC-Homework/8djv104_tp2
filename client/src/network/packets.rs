@@ -1,7 +1,7 @@
+use crate::network::packet_types::PacketType;
 use std::cmp::min;
 use std::io;
 use std::net::UdpSocket;
-use crate::network::packet_types::PacketType;
 
 /// Sends a connection packet
 pub fn send_connection(socket: &UdpSocket, username: &str) -> io::Result<usize> {

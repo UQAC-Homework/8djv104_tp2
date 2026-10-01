@@ -1,0 +1,27 @@
+use std::time::{Duration, Instant};
+
+/// Structure used to represent a timeout after a given duration
+pub struct Timeout {
+    start: Instant,
+    duration: Duration,
+}
+
+impl Timeout {
+    /// Creates a timeout with the given duration
+    pub fn create(duration: Duration) -> Timeout {
+        let now: Instant = Instant::now();
+
+        Timeout {
+            start: now,
+            duration,
+        }
+    }
+
+    /// Checks if the given timeout has expired
+    pub fn has_expired(&self) -> bool {
+        let now: Instant = Instant::now();
+        let end: Instant = self.start + self.duration;
+
+        end <= now
+    }
+}
