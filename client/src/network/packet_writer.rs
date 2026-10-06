@@ -6,7 +6,7 @@ pub struct PacketWriter {
     /// Length of the buffer in bits
     length: usize,
 
-    /// Offset in bits
+    /// Offset from the start of the buffer in bits
     offset: usize,
 }
 
