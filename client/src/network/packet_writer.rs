@@ -19,7 +19,7 @@ impl PacketWriter {
             offset: 0,
         }
     }
-    
+
     pub fn buffer(&self) -> &[u8] {
         &self.buffer[..self.length / 8]
     }
@@ -83,5 +83,20 @@ impl PacketWriter {
         }
 
         self.offset += 8;
+    }
+
+    /// Writes the given string
+    pub fn write_string(&mut self, s: &str) {
+        let value_length = s.len();
+
+        if !self.can_write(value_length * 8) {
+            panic!("Cannot write a string of {value_length} characters to the buffer.")
+        }
+
+        let bytes = s.as_bytes();
+
+        for byte in bytes {
+            self.write_byte(*byte);
+        }
     }
 }

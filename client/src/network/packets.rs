@@ -6,7 +6,6 @@ use std::net::UdpSocket;
 
 /// Sends a connection packet
 pub fn send_connection(socket: &UdpSocket, username: &str) -> io::Result<usize> {
-    let username_bytes: &[u8] = username.as_bytes();
     let mut length: usize = username.len();
 
     if length == 0 {
@@ -19,9 +18,7 @@ pub fn send_connection(socket: &UdpSocket, username: &str) -> io::Result<usize> 
 
     writer.write_byte(PacketType::Connection as u8);
     writer.write_nybble((length - 1) as u8);
-    for i in 0..length {
-        writer.write_byte(username_bytes[i]);
-    }
+    writer.write_string(username);
 
     socket.send(writer.buffer())
 }
