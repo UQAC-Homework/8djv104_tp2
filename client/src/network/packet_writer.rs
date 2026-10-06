@@ -20,6 +20,7 @@ impl PacketWriter {
         }
     }
 
+    /// Gets the buffer of the writer
     pub fn buffer(&self) -> &[u8] {
         &self.buffer[..self.length / 8]
     }
