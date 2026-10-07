@@ -20,6 +20,29 @@ fonctionnement général, rôles du client et du serveur.
 
 en-tête commun et format détaillé de chaque type de paquet (diagramme + description de chaque champ).
 
+### Shared Common header
+
+This section defines the shared common header between all packets. All packets **MUST** start with the header. Each
+packet is subjected to the rules of this header.
+
+#### Format
+
+```
+ 0      7
++--------+
+|  Type  |
++--------+
+```
+
+#### Fields
+
+| Name | Size             | Description                                         |
+|------|------------------|-----------------------------------------------------|
+| Type | 8 bits, unsigned | Magic number used to define the type of the packet. |
+
+The field `Type` **MUST NOT** be `0x0`. A packet with the type an invalid type **SHOULD** be ignored and **MUST** be
+discarded.
+
 ### `CON`
 
 Packet sent by the client to the server to request a connection.
@@ -35,19 +58,19 @@ Packet sent by the client to the server to request a connection.
 
 #### Fields
 
-| Name     | Size     | Description                                                             |
-|----------|----------|-------------------------------------------------------------------------|
-| Type     | 8 bits   | Magic number used to define the type of the packet. **MUST** be `0x01`. |
-| Length   | 4 bits   | Length of the username in bytes. **MUST** be offset by 1.               |
-| Username | 128 bits | Characters of the username. **MUST** be ASCII characters.                                                                        |
-| Unused   | 4 bits   | Unused bits                                                             |
+| Name     | Size               | Description                                               |
+|----------|--------------------|-----------------------------------------------------------|
+| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x01`.  |
+| Length   | 4 bits, unsigned   | Length of the username in bytes. **MUST** be offset by 1. |
+| Username | 128 bits, unsigned | Characters of the username. **MUST** be ASCII characters. |
+| Unused   | 4 bits             | Unused bits                                               |
 
-The field `Length` is offset by 1. For a username of length `1`, the length will be `0x0`. This allows the username to
-be of length `16`, while still fitting inside a nybble. Usernames of length `0` are not
+The field `Length` is offset by 1. For a username of length `1`, the length will be `0x0`. This allows the
+username to be a maximum length of `16`, while still fitting inside a nybble. Usernames of length `0` **MUST NOT** be
 allowed.
 
-The field `Username` is written on alternating bytes. The first nybble of a character are written as the lower half of
-the first byte, and the last nybble of a character are written as the upper half of the second byte.
+The field `Username` is written on alternating bytes. The first nybble of a character are written as the lower nybble of
+the first byte, and the last nybble of a character are written as the upper nybble of the second byte.
 
 #### Examples
 
