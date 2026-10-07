@@ -11,8 +11,6 @@ add_executable(server
         include/PacketType.h
         source/Logger.cpp
         include/Logger.h
-        include/serialization/packets.h
-        include/serialization/packets.h
         include/serialization/PacketReader.h
         source/serialization/PacketReader.cpp
         source/serialization/PackerWriter.cpp
