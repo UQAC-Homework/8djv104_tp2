@@ -218,6 +218,25 @@ Packet sent by the server to the client to notify that the connection request wa
 |----------|--------------------|-----------------------------------------------------------|
 | Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x03`.  |
 
+### `CONNECTION_CLOSE`
+
+Packet sent by the client to the server to notify that the client will disconnect.
+
+#### Format
+
+```
+ 0      7 
++--------+
+|  Type  |
++--------+
+```
+
+#### Fields
+
+| Name     | Size               | Description                                               |
+|----------|--------------------|-----------------------------------------------------------|
+| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x04`.  |
+
 ## Machines à états
 
 une pour le client, une pour le serveur (vu d’une connexion). Diagramme et table de transitions.
