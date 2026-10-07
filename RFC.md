@@ -134,9 +134,28 @@ Username:
 	P   l   a   y   e   r
 ```
 
+### `CONNECTION_ACCEPTED`
+
+Packet sent by the server to the client to notify that the connection request was accepted.
+
+#### Format
+
+```
+ 0      7 
++--------+
+|  Type  |
++--------+
+```
+
+#### Fields
+
+| Name     | Size               | Description                                               |
+|----------|--------------------|-----------------------------------------------------------|
+| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x02`.  |
+
 ### `CONNECTION_REJECTED`
 
-Packet sent by the server to the client to notify that a connection request was rejected.
+Packet sent by the server to the client to notify that the connection request was rejected.
 
 #### Format
 
