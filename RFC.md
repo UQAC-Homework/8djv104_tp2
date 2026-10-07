@@ -6,11 +6,41 @@ ce que fait le protocole, en quelques lignes
 
 ## Conventions
 
+This section will go over the conventions used in this document. It will define how a given value is written.
+
+### Numbers
+
+- **Binary**: Any value with the prefix `0b` is displayed as a binary value.
+- **Hexadecimal**: Any value with the prefix `0x` is displayed as a hexadecimal value.
+- **Decimal**: Any value without a prefix is displayed as a decimal value.
+- **Numeration**: Any single digit decimal number written into text is displayed as their spelled out counter-part, succeeded by their decimal representation written within parentheses. 
+- **Calculated Number**: Any value resulting from a calculation is displayed as code.
+
+### Binary arrangement
+
+The protocol uses the [little-endian](https://en.wikipedia.org/wiki/Endianness) format.
+
 référence à la RFC 2119, ordre des octets, notation utilisée
 
-## Terminologie
+
+
+## Terminology
+
+This section will go over the terminology used in this document. It will define what certain terms mean in the context of this document.
+
+- **MUST**: Defines a behavior that is required to be implemented. The protocol will not work properly if the behavior is missing or altered.
+- **MUST NOT**: Defines a behavior that is required to be missing. The protocol will not work properly if a behavior handles the specific situation.
+- **SHOULD**: Defines a suggested behavior. The protocol will work if a behavior is implemented or not. However, the protocol assumes that the suggested behavior is the one used. A custom behavior will not be able to be used by the protocol.
+- **COULD**: Defines a potential behavior. The protocol will work if a behavior is implemented or not. The protocol will assume that no implementation was defined, and the behavior will be ignored.
+- **Nybble**: Defines a group of four (4) consecutive bits.
+- **Upper Nybble**: Defines the first half of a byte. For the byte `0x2A`, the upper nybble is `0x2`.
+- **Lower Nybble**: Defines the second half of a byte. For the byte `0x2A`, the lower nybble is `0xA`.
 
 définition des termes employés (connexion, pair, paquet de données, paquet de contrôle, etc.).
+
+## Technical Aspects
+
+This section goes over the technical aspects of the protocol. It will define how, 
 
 ## Vue d’ensemble
 
@@ -40,10 +70,9 @@ packet is subjected to the rules of this header.
 |------|------------------|-----------------------------------------------------|
 | Type | 8 bits, unsigned | Magic number used to define the type of the packet. |
 
-The field `Type` **MUST NOT** be `0x0`. A packet with the type an invalid type **SHOULD** be ignored and **MUST** be
-discarded.
+The field `Type` **MUST NOT** be `0x0`. A packet with the type an invalid type **SHOULD** be ignored.
 
-### `CON`
+### `CONNECTION_REQUEST`
 
 Packet sent by the client to the server to request a connection.
 
@@ -65,12 +94,14 @@ Packet sent by the client to the server to request a connection.
 | Username | 128 bits, unsigned | Characters of the username. **MUST** be ASCII characters. |
 | Unused   | 4 bits             | Unused bits                                               |
 
-The field `Length` is offset by 1. For a username of length `1`, the length will be `0x0`. This allows the
-username to be a maximum length of `16`, while still fitting inside a nybble. Usernames of length `0` **MUST NOT** be
-allowed.
+The field `Length` is offset by one (1). For a username of one (1) character, the length **MUST** be `0x0`. For a username of 16 characters, the length **MUST** be `0xF`. This allows the
+username to be a maximum of 16 characters, while still fitting inside a nybble.
 
-The field `Username` is written on alternating bytes. The first nybble of a character are written as the lower nybble of
-the first byte, and the last nybble of a character are written as the upper nybble of the second byte.
+The field `Username` **MUST** be of length defined by the field `Length`. The protocol **MUST NOT** assume that the field takes the full possible length. For a username of three (3) characters, the total size of the field `Username` will be `24` bits. Usernames with no character or a length of zero (0) or less **MUST NOT** be allowed.
+
+Each character of the field `Username` **MUST** be written on two (2) bytes. The first nybble of the character **MUST** be written on the lower nybble of the first byte. The second nybble of the character **MUST** be written on the upper nybble of the second byte.
+
+The last nybble of the packet is unused. The protocol has no behavior logic defined for that data. The client **COULD** choose to set it, but **MUST NOT** assume that the server will read it. The server **SHOULD** ignore it.
 
 #### Examples
 
@@ -83,10 +114,10 @@ Example of a packet:
 20                 Last nybble of Username + Unused
 ```
 
-Example of how the username "Player" is found:
+Example of how the username `Player` is found:
 
 ```
-Raw: 01 55 06 c6 17 96 57 20
+Bytes: 01 55 06 c6 17 96 57 20
 Nybbles: 0 1 5 5 0 6 c 6 1 7 9 6 5 7 2 0
 Grouped Nybbles:
 	- Type: 0 1
@@ -95,11 +126,12 @@ Grouped Nybbles:
 	- Unused: 0
 
 Type: 1
-Length: 5 -> 6
+Length: 5
 Username:
 	5 0 6 c 6 1 7 9 6 5 7 2
-	50 6c 61 79 65 72
-	P  l  a  y  e  r
+	|/  |/  |/  |/  |/  |/
+	50  6c  61  79  65  72
+	P   l   a   y   e   r
 ```
 
 ## Machines à états
