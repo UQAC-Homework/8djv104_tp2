@@ -7,7 +7,7 @@
 enum PacketType : unsigned char
 {
 	UNDEFINED = 0x0,
-	CONNECTION = 0x1,
+	CONNECTION_REQUEST = 0x1,
 	CONNECTION_ACCEPTED = 0x2,
 	CONNECTION_TERMINATE = 0x3,
 	// UNUSED = 0x4 - 0xF

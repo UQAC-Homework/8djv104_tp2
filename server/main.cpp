@@ -77,7 +77,7 @@ int main(const int argc, char* argv[])
 			continue;
 		}
 
-		if (packet_type == CONNECTION)
+		if (packet_type == CONNECTION_REQUEST)
 		{
 			const auto username = unpack_connection(buffer, 1);
 
