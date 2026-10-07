@@ -71,7 +71,7 @@ unsigned char PacketReader::readByte()
 	return value;
 }
 
-char* PacketReader::readString(const ssize_t size)
+std::string PacketReader::readString(const ssize_t size)
 {
 	if (!this->canRead(size * 8))
 	{
@@ -80,12 +80,14 @@ char* PacketReader::readString(const ssize_t size)
 		);
 	}
 
-	char data[size + 1];
+	std::string data;
+	data.reserve(size);
 
 	for (int i = 0; i < size; i++)
-		data[i] = static_cast<char>(this->readByte());
-
-	data[size] = '\0';
+	{
+		const auto c = static_cast<char>(this->readByte());
+		data.push_back(c);
+	}
 
 	return data;
 }

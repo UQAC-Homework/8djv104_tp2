@@ -1,5 +1,6 @@
 #ifndef SERVER_PACKETREADER_H
 #define SERVER_PACKETREADER_H
+#include <string>
 #include <sys/types.h>
 
 /// Structure used to read packets from a binary format
@@ -33,7 +34,7 @@ public:
 	unsigned char readByte();
 	
 	/// Reads a string of the given size
-	char* readString(ssize_t size);
+	std::string readString(ssize_t size);
 };
 
 #endif //SERVER_PACKETREADER_H
