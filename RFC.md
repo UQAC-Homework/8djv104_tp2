@@ -222,7 +222,7 @@ Response to reject the connection request.
 |----------|--------------------|-----------------------------------------------------------|
 | Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x03`.  |
 
-### `CONNECTION_CLOSE`
+### `CONNECTION_CLOSED`
 
 Request to close a connection.
 
