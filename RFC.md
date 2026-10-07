@@ -16,7 +16,7 @@ This section will go over the conventions used in this document. It will define 
 - **Hexadecimal**: Any value with the prefix `0x` is displayed as a hexadecimal value.
 - **Decimal**: Any value without a prefix is displayed as a decimal value.
 - **Numeration**: Any single digit decimal number written into text is displayed as their spelled out counter-part, succeeded by their decimal representation written within parentheses. 
-- **Calculated Number**: Any value resulting from a calculation is displayed as code.
+- **Calculated Number**: Any value resulting from a calculation is displayed as a decimal, written as code.
 
 ### Binary Arrangement
 
@@ -28,14 +28,14 @@ This document displays packets using a custom format.
 
 #### Rules
 
-- Each field is displayed using a box defined with ASCII characters
-- Each field is displayed in order of apparition
+- Each field is displayed in order
 - Each field must have the starting bit offset above the box and to its most left
 - Each field must have the ending bit offset above the box and to its most right
 - Each offset must start from the start of the packet
-- The box that exceeds a multiple of 128 creates and starts a new row under the previous row
+- The box with a starting or ending offset that exceeds a multiple of 128 creates and starts a new row under the previous row
 - Each field must display their name within the box
-- Box size is arbitrary beyond the length of the name
+- Box must be at least as long as the name, with a padding on the left and the right
+- Each field is displayed using a box defined with ASCII characters
 - Corners of the box must use the `+` symbol
 - Vertical sides of the box must use the `|` symbol
 - Horizontal sides of the box must use the `-` symbol
@@ -74,7 +74,7 @@ The example will display the format of a packet with the following fields:
 This section will go over the terminology used in this document. It will define what certain terms mean in the context of this document.
 
 - **MUST**: Defines a behavior that is required to be implemented. The protocol will not work properly if the behavior is missing or altered.
-- **MUST NOT**: Defines a behavior that is required to be missing. The protocol will not work properly if a behavior handles the specific situation.
+- **MUST NOT**: Defines a behavior that is required to be missing. The protocol will not work properly if the behavior is implemented.
 - **SHOULD**: Defines a suggested behavior. The protocol will work if a behavior is implemented or not. However, the protocol assumes that the suggested behavior is the one used. A custom behavior will not be able to be used by the protocol.
 - **COULD**: Defines a potential behavior. The protocol will work if a behavior is implemented or not. The protocol will assume that no implementation was defined, and the behavior will be ignored.
 - **Nybble**: Defines a group of four (4) consecutive bits.
@@ -82,10 +82,6 @@ This section will go over the terminology used in this document. It will define 
 - **Lower Nybble**: Defines the second half of a byte. For the byte `0x2A`, the lower nybble is `0xA`.
 
 définition des termes employés (connexion, pair, paquet de données, paquet de contrôle, etc.).
-
-## Technical Aspects
-
-This section goes over the technical aspects of the protocol. It will define how, 
 
 ## Vue d’ensemble
 
@@ -115,7 +111,7 @@ packet is subjected to the rules of this header.
 |------|------------------|-----------------------------------------------------|
 | Type | 8 bits, unsigned | Magic number used to define the type of the packet. |
 
-The field `Type` **MUST NOT** be `0x0`. A packet with an unsupported type **SHOULD** be ignored.
+The field `Type` **MUST NOT** be `0x0`. Any type associated with a packet type **MUST** be supported. An unsupported type **SHOULD** be ignored.
 
 ### `CONNECTION_REQUEST`
 
@@ -149,7 +145,7 @@ username to be a maximum of 16 characters, while still fitting inside a nybble.
 
 The field `Username` **MUST** be of length defined by the field `Length`. The protocol **MUST NOT** assume that the field takes the full possible length. For a username of three (3) characters, the total size of the field `Username` will be `24` bits. Usernames with no character or a length of zero (0) or less **MUST NOT** be allowed.
 
-Each character of the field `Username` **MUST** be written on two (2) bytes. The first nybble of the character **MUST** be written on the lower nybble of the first byte. The second nybble of the character **MUST** be written on the upper nybble of the second byte.
+Each character of the field `Username` **MUST** be written on two (2) bytes. The upper nybble of the character **MUST** be written on the lower nybble of the first byte. The lower nybble of the character **MUST** be written on the upper nybble of the second byte.
 
 The last nybble of the packet is unused. The protocol has no behavior logic defined for that data. The client **COULD** choose to set it, but **MUST NOT** assume that the server will read it. The server **SHOULD** ignore it.
 
