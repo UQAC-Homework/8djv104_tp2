@@ -80,6 +80,10 @@ This section will go over the terminology used in this document. It will define 
 - **Nybble**: Defines a group of four (4) consecutive bits.
 - **Upper Nybble**: Defines the first half of a byte. For the byte `0x2A`, the upper nybble is `0x2`.
 - **Lower Nybble**: Defines the second half of a byte. For the byte `0x2A`, the lower nybble is `0xA`.
+- **Request**: Defines a packet sent from a client to a server.
+- **Response**: Defines a packet sent from a server to a client in response to a prior request.
+- **Push**: Defines a packet sent from a server to a client without a prior request.
+- **Exchange**: Defines a packet sent from either a server or a client to the other. A client will send to a server, and a server will send to a client.
 
 définition des termes employés (connexion, pair, paquet de données, paquet de contrôle, etc.).
 
@@ -115,7 +119,7 @@ The field `Type` **MUST NOT** be `0x0`. Any type associated with a packet type *
 
 ### `CONNECTION_REQUEST`
 
-Packet sent by the client to the server to request a connection.
+Request to establish a connection.
 
 #### Format
 
@@ -182,7 +186,7 @@ Username:
 
 ### `CONNECTION_ACCEPTED`
 
-Packet sent by the server to the client to notify that the connection request was accepted.
+Response to accept the connection request.
 
 #### Format
 
@@ -201,7 +205,7 @@ Packet sent by the server to the client to notify that the connection request wa
 
 ### `CONNECTION_REJECTED`
 
-Packet sent by the server to the client to notify that the connection request was rejected.
+Response to reject the connection request.
 
 #### Format
 
@@ -220,7 +224,7 @@ Packet sent by the server to the client to notify that the connection request wa
 
 ### `CONNECTION_CLOSE`
 
-Packet sent by the client to the server to notify that the client will disconnect.
+Request to close a connection.
 
 #### Format
 
