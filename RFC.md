@@ -91,7 +91,7 @@ définition des termes employés (connexion, pair, paquet de données, paquet de
 
 fonctionnement général, rôles du client et du serveur.
 
-## Format des paquets
+## Packets
 
 en-tête commun et format détaillé de chaque type de paquet (diagramme + description de chaque champ).
 
