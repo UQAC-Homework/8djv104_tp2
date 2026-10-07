@@ -70,7 +70,7 @@ packet is subjected to the rules of this header.
 |------|------------------|-----------------------------------------------------|
 | Type | 8 bits, unsigned | Magic number used to define the type of the packet. |
 
-The field `Type` **MUST NOT** be `0x0`. A packet with the type an invalid type **SHOULD** be ignored.
+The field `Type` **MUST NOT** be `0x0`. A packet with an unsupported type **SHOULD** be ignored.
 
 ### `CONNECTION_REQUEST`
 
@@ -109,9 +109,9 @@ Example of a packet:
 
 ```
 01                 Type
-55                 Length + First nybble of Username
+55                 Length + Upper nybble of Username
 06 c6 17 96 57     Username
-20                 Last nybble of Username + Unused
+20                 Lower nybble of Username + Unused
 ```
 
 Example of how the username `Player` is found:
@@ -133,6 +133,25 @@ Username:
 	50  6c  61  79  65  72
 	P   l   a   y   e   r
 ```
+
+### `CONNECTION_REJECTED`
+
+Packet sent by the server to the client to notify that a connection request was rejected.
+
+#### Format
+
+```
+ 0      7 
++--------+
+|  Type  |
++--------+
+```
+
+#### Fields
+
+| Name     | Size               | Description                                               |
+|----------|--------------------|-----------------------------------------------------------|
+| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x03`.  |
 
 ## Machines à états
 
