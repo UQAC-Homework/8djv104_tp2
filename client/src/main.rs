@@ -1,5 +1,7 @@
 mod network;
+mod time;
 
+use crate::time::repeater::Repeater;
 use network::packets;
 use std::env;
 use std::io;
@@ -7,14 +9,19 @@ use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
+use time::timeout::Timeout;
 
 fn print_incoming_messages(socket: &UdpSocket) {
     let buffer: &mut [u8] = &mut [0; 1024];
 
     loop {
         // Read from socket
-        let bytes_count = socket.recv(buffer).expect("TODO: panic message");
+        let bytes_count = socket.recv(buffer);
 
+        if bytes_count.is_err() {
+            continue;
+        }
         // Cut buffer
 
         println!("{}", String::from_utf8_lossy(buffer));
@@ -53,7 +60,38 @@ fn main() {
 
     // Send username as first message
     packets::send_connection(&socket, username).expect("Failed to send username.");
+    socket
+        .set_nonblocking(true)
+        .expect("Failed to set nonblocking.");
 
+    let timer: Timeout = Timeout::new(Duration::from_secs(10));
+    let mut repeater: Repeater = Repeater::new(Duration::from_secs(2));
+
+    while !timer.has_expired() {
+        
+        if repeater.is_due() {
+            repeater.reset();
+
+            // Send
+            println!("Trigger");
+            packets::send_connection(&socket, username);
+        }
+
+        let a = socket.recv(&mut [0; 1024]);
+
+        if a.is_ok() {
+            println!("{}", a.ok().unwrap());
+            break;
+        }
+    }
+
+    if !timer.has_expired() {
+        println!("You have seen this username.");
+    } else {
+        println!("You have timed out.");
+    }
+
+    return;
     let socket = Arc::new(socket);
     let recv_socket = Arc::clone(&socket);
 

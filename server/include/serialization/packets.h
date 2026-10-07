@@ -10,7 +10,7 @@
  * 
  * @return The decoded username
  */
-inline std::string unpack_connection(const char* buffer, int offset)
+inline std::string unpack_connection(const unsigned char* buffer, int offset)
 {
 	const unsigned char length = (buffer[offset] >> 4) + 1;
 	char username[length];
