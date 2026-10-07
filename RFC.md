@@ -6,6 +6,8 @@ ce que fait le protocole, en quelques lignes
 
 ## Conventions
 
+référence à la RFC 2119, ordre des octets, notation utilisée
+
 This section will go over the conventions used in this document. It will define how a given value is written.
 
 ### Numbers
@@ -16,13 +18,56 @@ This section will go over the conventions used in this document. It will define 
 - **Numeration**: Any single digit decimal number written into text is displayed as their spelled out counter-part, succeeded by their decimal representation written within parentheses. 
 - **Calculated Number**: Any value resulting from a calculation is displayed as code.
 
-### Binary arrangement
+### Binary Arrangement
 
 The protocol uses the [little-endian](https://en.wikipedia.org/wiki/Endianness) format.
 
-référence à la RFC 2119, ordre des octets, notation utilisée
+### Packet Format
 
+This document displays packets using a custom format.
 
+#### Rules
+
+- Each field is displayed using a box defined with ASCII characters
+- Each field is displayed in order of apparition
+- Each field must have the starting bit offset above the box and to its most left
+- Each field must have the ending bit offset above the box and to its most right
+- Each offset must start from the start of the packet
+- The box that exceeds a multiple of 128 creates and starts a new row under the previous row
+- Each field must display their name within the box
+- Box size is arbitrary beyond the length of the name
+- Corners of the box must use the `+` symbol
+- Vertical sides of the box must use the `|` symbol
+- Horizontal sides of the box must use the `-` symbol
+
+#### Examples
+
+The example will display the format of a packet with the following fields:
+- Type: 8 bits
+- Id: 32 bits
+- Checksum: 32 bits
+- Value: 64 bits
+- Length: 16 bits
+- Deep Checksum: 64 bits
+- Signature: 40 bits
+- Unused: 1 bit
+
+```
+ 0    7 8 39 40      71
++------+----+----------+
+| Type | Id | Checksum |
++------+----+----------+
+
+ 72  135 136  151 152         215 216     255
++-------+--------+---------------+-----------+
+| Value | Length | Deep Checksum | Signature |
++-------+--------+---------------+-----------+
+
+ 256  257
++--------+
+| Unused |
++--------+
+```
 
 ## Terminology
 
@@ -79,10 +124,15 @@ Packet sent by the client to the server to request a connection.
 #### Format
 
 ```
- 0      7 8     11 12     139 140  143
-+--------+--------+----------+--------+
-|  Type  | Length | Username | Unused |
-+--------+--------+----------+--------+
+ 0      7 8     11
++--------+--------+
+|  Type  | Length |
++--------+--------+
+
+ 12     139  140  143
++----------+--------+
+| Username | Unused |
++----------+--------+
 ```
 
 #### Fields
