@@ -205,7 +205,7 @@ username to be a maximum of 16 characters, while still fitting inside a nybble.
 
 The field `Username` **MUST** be of length defined by the field `Length`. The protocol **MUST NOT** assume that the field takes the full possible length. For a username of three (3) characters, the total size of the field `Username` will be `24` bits. Usernames with no character or a length of zero (0) or less **MUST NOT** be allowed.
 
-Each character of the field `Username` **MUST** be written on two (2) bytes. The upper nybble of the character **MUST** be written on the lower nybble of the first byte. The lower nybble of the character **MUST** be written on the upper nybble of the second byte.
+Each character of the field `Username` **MUST** is one (1) byte in length. Since the field `Username` begins at a four (4) bits offset, each character **MUST** span across two (2) adjacent packet bytes. The upper nybble of the character **MUST** be written on the lower nybble of the first byte. The lower nybble of the character **MUST** be written on the upper nybble of the second byte.
 
 The last nybble of the packet is unused. The protocol has no behavior logic defined for that data. The client **COULD** choose to set it, but **MUST NOT** assume that the server will read it. The server **SHOULD** ignore it.
 
@@ -503,24 +503,32 @@ stateDiagram-v2
 ##### Diagram
 
 ```mermaid
----
-title:
----
 stateDiagram-v2
-	Offline
-	Online
-	Connect: Send connection request
-	Wait: Wait 1 second
-	Offline --> Connect: Request connection
-	Connect --> Wait
-	Wait --> Connect
-	Wait --> Online: Connection accepted
-	Wait --> Offline: Connection rejected
-	Wait --> Timeout: Waited 10 seconds total
-	Timeout --> Offline
+    [*] --> Offline
+    Offline --> Wait: User requests connection
+    
+    state Wait {
+		Retransmit: Resend Request
+        [*] --> Idle
+        Idle --> Retransmit: 1 second timer expires
+    }
+    
+    Wait --> Online: Receive CONNECTION_ACCEPTED
+    Wait --> Offline: Receive CONNECTION_REJECTED
+    Wait --> Offline: Total 10s Timeout Reached
+    
+    Online --> Offline: Connection Closed
 ```
 
 ##### Transition Table
+
+| Current State | Event       | Condition                      | Action                    | Next State |
+| ------------- | ----------- | ------------------------------ | ------------------------- | ---------- |
+| Offline       | User Action | User requested connection      | Send `CONNECTION_REQUEST` | Wait       |
+| Wait          | Packet      | Received `CONNECTION_REJECTED` | Notify user of rejection  | Offline    |
+| Wait          | Packet      | Received ̀`CONNECTION_ACCEPTED` | None                      | Online     |
+| Wait          | Timer       | 1 second timer expired         | Send `CONNECTION_REQUEST` | Wait       |
+| Wait          | Timer       | 10 seconds timer expired       | Notify user of failure    | Offline    |
 
 | Current State | Event          | Condition                             | Action                                  | Next State |
 | ------------- | -------------- | ------------------------------------- | --------------------------------------- | ---------- |
