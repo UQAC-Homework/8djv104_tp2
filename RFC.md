@@ -516,17 +516,17 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> Offline
-    Offline --> Wait: User requests connection
+    Offline --> Wait: User requested connection
     
     state Wait {
 		Retransmit: Resend Request
         [*] --> Idle
-        Idle --> Retransmit: 1 second timer expires
+        Idle --> Retransmit: Retry timer expired
     }
     
-    Wait --> Online: Receive CONNECTION_ACCEPTED
-    Wait --> Offline: Receive CONNECTION_REJECTED
-    Wait --> Offline: Total 10s Timeout Reached
+    Wait --> Online: Received CONNECTION_ACCEPTED
+    Wait --> Offline: Received CONNECTION_REJECTED
+    Wait --> Offline: Timeout timer expired
     
     Online --> Offline: Connection Closed
 ```
@@ -547,8 +547,8 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    Online --> Termination: User request termination
-    Online --> Termination: Receive CONNECTION_CLOSED
+    Online --> Termination: User requested termination
+    Online --> Termination: Received CONNECTION_CLOSED
     Termination --> Offline: Sockets torn down
 ```
 
@@ -569,28 +569,22 @@ stateDiagram-v2
 title:
 ---
 stateDiagram-v2
-	Online
-	Idle
-	Heartbeat: Send heartbeat
-	Request: Heartbeat Request
-	Wait: Wait 200 ms
-	Request --> Heartbeat
-	Heartbeat --> Wait
-	Wait --> Heartbeat: Heartbeat not received
-	Wait --> Online: Heartbeat received
-	Online --> Idle: No message sent within 1 second
-	Idle --> Heartbeat
+    Online --> Wait: Inactivity timer expired
+    Online --> Online: Received HEARTBEAT_REQUEST
+    Wait --> Online: Received HEARTBEAT_RECEIVED
+    Wait --> Wait: Retry timer expired
+    Wait --> Offline: Timeout timer reached
 ```
 
 ##### Transition Table
 
-| Current State | Event          | Condition                        | Action                                            | Next State |
-| ------------- | -------------- | -------------------------------- | ------------------------------------------------- | ---------- |
-| Online        | Timeout        | 1 second emission inactivity     | Transition to idle state                          | Idle       |
-| Idle          | Timeout        | Ready to send heartbeat          | Send `HEARTBEAT_BROADCASTED`, start 200ms timer   | Wait       |
-| Wait          | Receive packet | `HEARTBEAT_BROADCASTED` received | Stop timer, return to online state                | Online     |
-| Wait          | Timeout        | 200ms expires without ack        | Retransmit `HEARTBEAT_BROADCASTED`, restart timer | Wait       |
-| Online        | Receive packet | `HEARTBEAT_REQUEST` received     | Immediately reply with `HEARTBEAT_BROADCASTED`    | Online     |
+| Current State | Event  | Condition                      | Action                       | Next State |
+| ------------- | ------ | ------------------------------ | ---------------------------- | ---------- |
+| Online        | Timer  | 1 second timer expired         | Send `HEARTBEAT_BROADCASTED` | Wait       |
+| Online        | Packet | Received `HEARTBEAT_REQUEST`   | Send `HEARTBEAT_BROADCASTED` | Online     |
+| Wait          | Packet | Received `HEARTBEAT_RECEIVED`  | None                         | Online     |
+| Wait          | Timer  | 200 milliseconds timer expired | Send `HEARTBEAT_BROADCASTED` | Wait       |
+| Wait          | Timer  | 30 seconds timer expired       | Send `CONNECTION_CLOSED`     | Offline    |
 
 ## Procédures
 
