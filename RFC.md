@@ -77,9 +77,10 @@ This section will go over the terminology used in this document. It will define 
 - **MUST NOT**: Defines a behavior that is required to be missing. The protocol will not work properly if the behavior is implemented.
 - **SHOULD**: Defines a suggested behavior. The protocol will work if a behavior is implemented or not. However, the protocol assumes that the suggested behavior is the one used. A custom behavior will not be able to be used by the protocol.
 - **COULD**: Defines a potential behavior. The protocol will work if a behavior is implemented or not. The protocol will assume that no implementation was defined, and the behavior will be ignored.
+- **Upper [X]**: Defines the first instance of `[X]` starting from the most significant bit.
+- **Lower [X]**: Defines the first instance of `[X]` starting from the least significant bit.
+- **Tayste**: Defines a group of two (2) consecutive bits.
 - **Nybble**: Defines a group of four (4) consecutive bits.
-- **Upper Nybble**: Defines the first half of a byte. For the byte `0x2A`, the upper nybble is `0x2`.
-- **Lower Nybble**: Defines the second half of a byte. For the byte `0x2A`, the lower nybble is `0xA`.
 - **Request**: Defines a packet sent from a client to a server.
 - **Response**: Defines a packet sent from a server to a client in response to a prior request.
 - **Push**: Defines a packet sent from a server to a client without a prior request.
@@ -240,6 +241,84 @@ Request to close a connection.
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
 | Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x04`.  |
+
+### `MESSAGE_BROADCASTED`
+
+Exchange to broadcast a new message.
+
+#### Format
+
+```
+ 0      7 8              13 14                21 22            31
++--------+-----------------+--------------------+----------------+
+|  Type  | User Identifier | Message Identifier | Message Length |
++--------+-----------------+--------------------+----------------+
+
+ 31   8191
++---------+
+| Message |
++---------+
+```
+
+#### Fields
+
+| Name     | Size               | Description                                               |
+|----------|--------------------|-----------------------------------------------------------|
+| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x10`.  |
+| User Identifier | 6 bits, unsigned | Unique identifier for the local user. |
+| Message Identifier | 8 bits, unsigned | Identifier of the message. **COULD** be reused in other messages. |
+| Message Length | 10 bits, unsigned | Length of the message in bytes. |
+| Message | 8160 bits, unsigned | Characters of the message. **MUST** be ASCII characters. |
+
+The field `Message Length` **MUST NOT** be more than `1020`. Any greater length **MUST** be truncated to `1020`. The field `Message Length` **SHOULD NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
+
+The field `Message` **MUST** be of length defined by the field `Message Length`. The protocol **MUST NOT** assume that the field takes the full possible length. For a message of three (3) characters, the total size of the field `Message` will be `24` bits.
+
+
+#### Examples
+
+Example of a packet:
+
+```
+10				   					Type
+94									User Identifier + Upper tayste of Message Identifier
+00                					Lower 6 bits of Message Identifier + Upper tayste of Message Length
+0B				   					Lower byte of Message Length
+48 65 6C 6C 6F 20 57 6F 72 6C 64 	Message
+```
+
+Example of how the message `Hello World` is found:
+```
+Bytes: 10 94 00 0B 48 65 6C 6C 6F 20 57 6F 72 6C 64
+Taystes: 00 01 00 00 10 01 01 00 00 00 00 00 00 00 10 11 01 00 10 00 01 10 01 01 01 10 11 00 01 10 11 00 01 10 11 11 00 10 00 00 01 01 01 11 01 10 11 11 01 11 00 10 01 10 11 00 01 10 01 00
+Bits: 0 0 0 1 0 0 0 0 1 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 1 0 1 0 0 1 0 0 0 0 1 1 0 0 1 0 1 0 1 1 0 1 1 0 0 0 1 1 0 1 1 0 0 0 1 1 0 1 1 1 1 0 0 1 0 0 0 0 0 0 1 0 1 0 1 1 1 0 1 1 0 1 1 1 1 0 1 1 1 0 0 1 0 0 1 1 0 1 1 0 0 0 1 1 0 0 1 0 0
+
+Grouped Bits:
+	- Type: 0 0 0 1 0 0 0 0
+	- User Identifier: 1 0 0 1 0 1
+	- Message Identifier: 0 0 0 0 0 0 0 0
+	- Message Length: 0 0 0 0 0 0 1 0 1 1
+	- Message: 0 1 0 0 1 0 0 0 0 1 1 0 0 1 0 1 0 1 1 0 1 1 0 0 0 1 1 0 1 1 0 0 0 1 1 0 1 1 1 1 0 0 1 0 0 0 0 0 0 1 0 1 0 1 1 1 0 1 1 0 1 1 1 1 0 1 1 1 0 0 1 0 0 1 1 0 1 1 0 0 0 1 1 0 0 1 0 0
+
+Hexadecimal Grouped Bits:
+	- Type: 10
+	- User Identifier: 25
+	- Message Identifier: 00
+	- Message Length: 0B
+	- Message: 48 65 6C 6C 6F 20 57 6F 72 6C 64
+
+Type: 32
+User Identifier: 37
+Message Identifier: 0
+Message Length: 11
+Message:
+	48 65 6C 6C 6F 20    57 6F 72 6C 64
+	H  e  l  l  o  Space W  o  r  l  d
+```
+
+### `MESSAGE_REQUEST`
+
+Exchange to request a message.
 
 ## Machines à états
 
