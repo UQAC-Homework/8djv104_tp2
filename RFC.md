@@ -92,11 +92,11 @@ définition des termes employés (connexion, pair, paquet de données, paquet de
 
 fonctionnement général, rôles du client et du serveur.
 
-## Packets
+## Headers
 
-en-tête commun et format détaillé de chaque type de paquet (diagramme + description de chaque champ).
+This section will go over the headers that can be shared between multiple packets. Each header defines a packet format, a description for each of their fields and examples if appropriated.
 
-### Shared Common header
+### `PACKET_TYPE`
 
 This section defines the shared common header between all packets. All packets **MUST** start with the header. Each
 packet is subjected to the rules of this header.
@@ -117,6 +117,61 @@ packet is subjected to the rules of this header.
 | Type | 8 bits, unsigned | Magic number used to define the type of the packet. |
 
 The field `Type` **MUST NOT** be `0x0`. Any type associated with a packet type **MUST** be supported. An unsupported type **SHOULD** be ignored.
+
+### `MISSING_MESSAGES`
+
+This section defines a shared header that allows to notify of missing messages. Upon receiving a packet with this header, the server **MUST** respond. Upon receiving a packet with this header, the client **MUST** respond.
+
+#### Format
+```
+ 0                       7 8               71
++-------------------------+------------------+
+| Last Message Identifier | Missing Messages |
++-------------------------+------------------+
+```
+
+#### Fields
+
+| Name     | Size               | Description                                               |
+|----------|--------------------|-----------------------------------------------------------|
+| Last Message Identifier | 8 bits, unsigned | Identifier of the last message broadcasted. **COULD** be reused in other messages. |
+| Missing Messages | 64 bits, unsigned | Flags defining if a previous message was received. |
+
+The field `Missing Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Missing Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Missing Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
+
+#### Examples
+
+#### Examples
+
+Example of a packet:
+
+```
+36							Last Message Identifier
+00 00 01 00 00 00 20 39		Missing Messages
+```
+
+Example of how the missing messages with the identifiers `53`, `50`, `49`, `48`, `40` and `13` from the last message with the identifier `54` are requested:
+```
+Bytes: 36 00 00 01 00 00 00 20 39
+Bits: 0 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 1 1 1 0 0 1
+
+Grouped Bits:
+	- Last Message Identifier: 0 0 1 1 0 1 1 0
+	- Missing Messages: 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 1 1 1 0 0 1
+
+Last Message Identifier: 54
+Missing Messages:
+	0   0  0  0  0  0  0  0  0  0  0 0 0 0 0 0 0 0 0 0 0  0  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  1  0  0  0  0  0  0  0  1  1  1  0  0  1 
+	-10 -9 -8 -7 -6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53
+	|____________________________|                              |                                                                                |                       |  |  |        |
+				  |                                             \________________________________________________________________________________|_______________________|__|__|________/
+				  |                                                                                                       |
+				ignored																									missing		
+```
+
+## Packets
+
+This section will go over the packets used by the protocol. Each packet defines a packet format, a description for each of their fields and examples if appropriated.
 
 ### `CONNECTION_REQUEST`
 
@@ -140,7 +195,7 @@ Request to establish a connection.
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x01`.  |
+| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x01`.  |
 | Length   | 4 bits, unsigned   | Length of the username in bytes. **MUST** be offset by 1. |
 | Username | 128 bits, unsigned | Characters of the username. **MUST** be ASCII characters. |
 | Unused   | 4 bits             | Unused bits                                               |
@@ -202,7 +257,7 @@ Response to accept the connection request.
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x02`.  |
+| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x02`.  |
 
 ### `CONNECTION_REJECTED`
 
@@ -221,7 +276,7 @@ Response to reject the connection request.
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x03`.  |
+| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x03`.  |
 
 ### `CONNECTION_CLOSED`
 
@@ -240,7 +295,7 @@ Request to close a connection.
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x04`.  |
+| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x04`.  |
 
 ### `MESSAGE_BROADCASTED`
 
@@ -264,7 +319,7 @@ Exchange to broadcast a new message.
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x10`.  |
+| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x10`.  |
 | User Identifier | 6 bits, unsigned | Unique identifier for the local user. |
 | Message Identifier | 8 bits, unsigned | Identifier of the message. **COULD** be reused in other messages. |
 | Message Length | 10 bits, unsigned | Length of the message in bytes. |
@@ -333,42 +388,11 @@ Exchange to request a message.
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x11`.  |
-| Last Message Identifier | 8 bits, unsigned | Identifier of the last message broadcasted. **COULD** be reused in other messages. |
-| Missing Messages | 64 bits, unsigned | Flags defining if a previous message was received. |
+| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x11`.  |
+| Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
+| Missing Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
 
 The field `Missing Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Missing Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Missing Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
-
-#### Examples
-
-Example of a packet:
-
-```
-11				   			Type
-36							Last Message Identifier
-00 00 01 00 00 00 20 39		Missing Messages
-```
-
-Example of how the missing messages with the identifiers `53`, `50`, `49`, `48`, `40` and `13` from the last message with the identifier `54` are requested:
-```
-Bytes: 11 36 00 00 01 00 00 00 20 39
-Bits: 0 0 0 1 0 0 0 1 0 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 1 1 1 0 0 1
-
-Grouped Bits:
-	- Type: 0 0 0 1 0 0 0 1
-	- Last Message Identifier: 0 0 1 1 0 1 1 0
-	- Missing Messages: 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 1 1 1 0 0 1
-
-Type: 17
-Last Message Identifier: 54
-Missing Messages:
-	0   0  0  0  0  0  0  0  0  0  0 0 0 0 0 0 0 0 0 0 0  0  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  1  0  0  0  0  0  0  0  1  1  1  0  0  1 
-	-10 -9 -8 -7 -6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53
-	|____________________________|                              |                                                                                |                       |  |  |        |
-				  |                                             \________________________________________________________________________________|_______________________|__|__|________/
-				  |                                                                                                       |
-				ignored																									missing		
-```
 
 ### `HEARTBEAT_BROADCASTED`
 
@@ -387,7 +411,7 @@ Request to notify of the health status of the client.
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x20`.  |
+| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x20`.  |
 
 ### `HEARTBEAT_RECEIVED`
 
@@ -406,7 +430,7 @@ Response to notify that the health status was received.
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x21`.  |
+| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x21`.  |
 
 ### `HEARTBEAT_REQUEST`
 
@@ -425,7 +449,7 @@ Push to request a health status notification.
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x22`.  |
+| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x22`.  |
 
 ## Machines à états
 
