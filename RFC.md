@@ -481,31 +481,35 @@ The server maintains a state machine for each individual client connection, trac
 
 ```mermaid
 stateDiagram-v2
-	Dead
-	Alive
-	Suspicious
-	Request: Heartbeat Request
-	Wait: Wait 200 ms
-	New --> Alive: Connection accepted
-	Alive --> Dead: Connection closed
-	Alive --> Request: 1.5 seconds of inactivity
-	Suspicious --> Alive: Packet received
-	Suspicious --> Dead: Waited 3 seconds total
-	Suspicious --> Wait
-	Wait --> Request
-	Request --> Suspicious
+	[*] --> New
+	New --> Session: Connection accepted
+    New --> Terminated: Connection rejected
+	Session --> Terminated
+	Terminated --> [*]
+
+	state Session {
+		[*] --> Alive
+		 Alive --> Suspicious: Inactivity timer expired
+		Suspicious --> Alive: Received HEARTBEAT_BROADCAST
+		Suspicious --> Alive: Received valid packet
+		Suspicious --> Dead: Timeout timer expired
+		Alive --> Dead: Received CONNECTION_CLOSED
+		Dead --> [*]
+	}
 ```
 
 #### Transition Table
 
-| Current State | Event                | Condition                  | Action                                                 | Next State |
-| ------------- | -------------------- | -------------------------- | ------------------------------------------------------ | ---------- |
-| New           | Receive packet       | Valid `CONNECTION_REQUEST` | Register client session and send `CONNECTION_ACCEPTED` | Alive      |
-| Alive         | Receive packet       | Valid packet received      | Reset inactivity timer                                 | Alive      |
-| Alive         | Timeout              | 1.5 seconds of inactivity  | Start sending `HEARTBEAT_REQ` every 200 ms             | Suspicious |
-| Suspicious    | Receive valid packet | Valid packet received      | Reset inactivity timer                                 | Alive      |
-| Suspicious    | Timeout              | 3 seconds total inactivity | Drop client, remove from participant table             | Dead       |
-| Alive         | Receive packet       | Valid `CONNECTION_CLOSED`  | Drop client, remove from participant table             | Dead       |
+| Current State | Event    | Condition                              | Action                                      | Next State |
+| ------------- | -------- | -------------------------------------- | ------------------------------------------- | ---------- |
+| New           | Packet   | Received accepted `CONNECTION_REQUEST` | Send `CONNECTION_ACCEPTED`, register client | Alive      |
+| New           | Internal | Received rejected `CONNECTION_REQUEST` | Send `CONNECTION_REJECTED`                  | Terminated |
+| Alive         | Timer    | Inactivity timer expired               | Send `HEARTBEAT_REQUEST`                    | Suspicious |
+| Alive         | Packet   | Received `CONNECTION_CLOSED`           | Unregister client                           | Dead       |
+| Suspicious    | Packet   | Received `HEARTBEAT_BROADCAST`         | None                                        | Alive      |
+| Suspicious    | Packet   | Received any valid packet              | None                                        | Alive      |
+| Suspicious    | Timer    | Timeout timer expired                  | Unregister client                           | Dead       |
+| Dead          | Internal | Action Executed                        | Tear down socket                            | Terminated |
 
 ### Client
 
@@ -570,9 +574,7 @@ stateDiagram-v2
 stateDiagram-v2
 	[*] --> Online
 	Online --> Wait: Inactivity timer expired
-    Online --> Online: Received HEARTBEAT_REQUEST
     Wait --> Online: Received HEARTBEAT_RECEIVED
-    Wait --> Wait: Retry timer expired
     Wait --> Offline: Timeout timer reached
 	Offline --> [*]
 ```
