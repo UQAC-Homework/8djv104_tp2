@@ -530,14 +530,6 @@ stateDiagram-v2
 | Wait          | Timer       | 1 second timer expired         | Send `CONNECTION_REQUEST` | Wait       |
 | Wait          | Timer       | 10 seconds timer expired       | Notify user of failure    | Offline    |
 
-| Current State | Event          | Condition                             | Action                                  | Next State |
-| ------------- | -------------- | ------------------------------------- | --------------------------------------- | ---------- |
-| Offline       | User Action    | Connect requested                     | Send `CONNECTION_REQUEST`               | Wait       |
-| Wait          | Timeout        | 1 second expires                      | Retransmit `CONNECTION_REQUEST`         | Wait       |
-| Wait          | Receive packet | `CONNECTION_ACCEPTED`                 | Stop timer, mark connection established | Online     |
-| Wait          | Receive packet | `CONNECTION_REJECTED`                 | Stop timer, notify user                 | Offline    |
-| Wait          | Timeout        | Total elapsed time reaches 10 seconds | Stop timer, report failure              | Offline    |
-
 #### Disconnection
 
 ##### Diagram
