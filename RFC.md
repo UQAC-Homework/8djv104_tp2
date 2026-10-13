@@ -291,7 +291,7 @@ Response to reject the connection request.
 
 ### `CONNECTION_CLOSED`
 
-Request to close a connection.
+Exchange to notify that the connection is closed.
 
 #### Format
 
@@ -308,9 +308,9 @@ Request to close a connection.
 | ---- | ---------------- | ---------------------------------------------------------------------- |
 | Type | 8 bits, unsigned | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x04`. |
 
-### `MESSAGE_BROADCASTED`
+### `MESSAGE_BROADCAST`
 
-Exchange to broadcast a new message.
+Exchange to broadcast a message.
 
 #### Format
 
@@ -406,7 +406,7 @@ Exchange to request a message.
 
 The field `Received Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Received Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Received Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
 
-### `HEARTBEAT_BROADCASTED`
+### `HEARTBEAT_BROADCAST`
 
 Request to notify of the health status of the client.
 
@@ -547,9 +547,11 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+	[*] --> Online
     Online --> Termination: User requested termination
     Online --> Termination: Received CONNECTION_CLOSED
     Termination --> Offline: Sockets torn down
+	Offline --> [*]
 ```
 
 ##### Transition Table
@@ -565,26 +567,45 @@ stateDiagram-v2
 ##### Diagram
 
 ```mermaid
----
-title:
----
 stateDiagram-v2
-    Online --> Wait: Inactivity timer expired
+	[*] --> Online
+	Online --> Wait: Inactivity timer expired
     Online --> Online: Received HEARTBEAT_REQUEST
     Wait --> Online: Received HEARTBEAT_RECEIVED
     Wait --> Wait: Retry timer expired
     Wait --> Offline: Timeout timer reached
+	Offline --> [*]
 ```
 
 ##### Transition Table
 
-| Current State | Event  | Condition                      | Action                       | Next State |
-| ------------- | ------ | ------------------------------ | ---------------------------- | ---------- |
-| Online        | Timer  | 1 second timer expired         | Send `HEARTBEAT_BROADCASTED` | Wait       |
-| Online        | Packet | Received `HEARTBEAT_REQUEST`   | Send `HEARTBEAT_BROADCASTED` | Online     |
-| Wait          | Packet | Received `HEARTBEAT_RECEIVED`  | None                         | Online     |
-| Wait          | Timer  | 200 milliseconds timer expired | Send `HEARTBEAT_BROADCASTED` | Wait       |
-| Wait          | Timer  | 30 seconds timer expired       | Send `CONNECTION_CLOSED`     | Offline    |
+| Current State | Event  | Condition                      | Action                     | Next State |
+| ------------- | ------ | ------------------------------ | -------------------------- | ---------- |
+| Online        | Timer  | 1 second timer expired         | Send `HEARTBEAT_BROADCAST` | Wait       |
+| Online        | Packet | Received `HEARTBEAT_REQUEST`   | Send `HEARTBEAT_BROADCAST` | Online     |
+| Wait          | Packet | Received `HEARTBEAT_RECEIVED`  | None                       | Online     |
+| Wait          | Timer  | 200 milliseconds timer expired | Send `HEARTBEAT_BROADCAST` | Wait       |
+| Wait          | Timer  | 30 seconds timer expired       | Send `CONNECTION_CLOSED`   | Offline    |
+
+#### Data Transfer
+
+##### Diagram
+
+```mermaid
+stateDiagram-v2
+	[*] --> Online
+	Online --> Offline: Terminated
+	Offline --> [*]
+```
+
+##### Transition Table
+
+| Current State | Event       | Condition                    | Action                             | Next State |
+| ------------- | ----------- | ---------------------------- | ---------------------------------- | ---------- |
+| Online        | User Action | User submitted a message     | Send and cache `MESSAGE_BROADCAST` | Online     |
+| Online        | Packet      | Received `MESSAGE_BROADCAST` | Display message to user            | Online     |
+| Online        | Packet      | Received `MESSAGE_REQUEST`   | Send cached `MESSAGE_BROADCAST`    | Online     |
+| Online        | Internal    | Action executed              | Tear down local sockets            | Offline    |
 
 ## Procédures
 
