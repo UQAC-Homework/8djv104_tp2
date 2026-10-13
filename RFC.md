@@ -115,7 +115,7 @@ packet is subjected to the rules of this header.
 #### Fields
 
 | Name | Size             | Description                                         |
-|------|------------------|-----------------------------------------------------|
+| ---- | ---------------- | --------------------------------------------------- |
 | Type | 8 bits, unsigned | Magic number used to define the type of the packet. |
 
 The field `Type` **MUST NOT** be `0x0`. Any type associated with a packet type **MUST** be supported. An unsupported type **SHOULD** be ignored.
@@ -134,10 +134,10 @@ This section defines a shared header that allows to notify of missing messages.
 
 #### Fields
 
-| Name     | Size               | Description                                               |
-|----------|--------------------|-----------------------------------------------------------|
-| Last Message Identifier | 8 bits, unsigned | Identifier of the last received message. **COULD** be reused in other messages. |
-| Received Messages | 64 bits, unsigned | Flags defining if a previous message was received. |
+| Name                    | Size              | Description                                                                     |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------------- |
+| Last Message Identifier | 8 bits, unsigned  | Identifier of the last received message. **COULD** be reused in other messages. |
+| Received Messages       | 64 bits, unsigned | Flags defining if a previous message was received.                              |
 
 The field `Received Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Received Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Received Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
 
@@ -193,12 +193,12 @@ Request to establish a connection.
 
 #### Fields
 
-| Name     | Size               | Description                                               |
-|----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x01`.  |
-| Length   | 4 bits, unsigned   | Length of the username in bytes. **MUST** be offset by 1. |
-| Username | 128 bits, unsigned | Characters of the username. **MUST** be ASCII characters. |
-| Unused   | 4 bits             | Unused bits                                               |
+| Name     | Size               | Description                                                            |
+| -------- | ------------------ | ---------------------------------------------------------------------- |
+| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x01`. |
+| Length   | 4 bits, unsigned   | Length of the username in bytes. **MUST** be offset by 1.              |
+| Username | 128 bits, unsigned | Characters of the username. **MUST** be ASCII characters.              |
+| Unused   | 4 bits             | Unused bits                                                            |
 
 The field `Length` is offset by one (1). For a username of one (1) character, the length **MUST** be `0x0`. For a username of 16 characters, the length **MUST** be `0xF`. This allows the
 username to be a maximum of 16 characters, while still fitting inside a nybble.
@@ -255,9 +255,9 @@ Response to accept the connection request.
 
 #### Fields
 
-| Name     | Size               | Description                                               |
-|----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x02`.  |
+| Name | Size             | Description                                                            |
+| ---- | ---------------- | ---------------------------------------------------------------------- |
+| Type | 8 bits, unsigned | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x02`. |
 
 ### `CONNECTION_REJECTED`
 
@@ -274,9 +274,9 @@ Response to reject the connection request.
 
 #### Fields
 
-| Name     | Size               | Description                                               |
-|----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x03`.  |
+| Name | Size             | Description                                                            |
+| ---- | ---------------- | ---------------------------------------------------------------------- |
+| Type | 8 bits, unsigned | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x03`. |
 
 ### `CONNECTION_CLOSED`
 
@@ -293,9 +293,9 @@ Request to close a connection.
 
 #### Fields
 
-| Name     | Size               | Description                                               |
-|----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x04`.  |
+| Name | Size             | Description                                                            |
+| ---- | ---------------- | ---------------------------------------------------------------------- |
+| Type | 8 bits, unsigned | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x04`. |
 
 ### `MESSAGE_BROADCASTED`
 
@@ -317,15 +317,15 @@ Exchange to broadcast a new message.
 
 #### Fields
 
-| Name     | Size               | Description                                               |
-|----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x10`.  |
-| User Identifier | 6 bits, unsigned | Unique identifier for the local user. |
-| Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
-| Received Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
-| Message Identifier | 8 bits, unsigned | Identifier of the message. **COULD** be reused in other messages. |
-| Message Length | 10 bits, unsigned | Length of the message in bytes. |
-| Message | 8000 bits, unsigned | Characters of the message. **MUST** be ASCII characters. |
+| Name                    | Size                | Description                                                            |
+| ----------------------- | ------------------- | ---------------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned    | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x10`. |
+| User Identifier         | 6 bits, unsigned    | Unique identifier for the local user.                                  |
+| Last Message Identifier | 8 bits, unsigned    | Field shared with the common header `MISSING_MESSAGES`.                |
+| Received Messages       | 64 bits, unsigned   | Field shared with the common header `MISSING_MESSAGES`.                |
+| Message Identifier      | 8 bits, unsigned    | Identifier of the message. **COULD** be reused in other messages.      |
+| Message Length          | 10 bits, unsigned   | Length of the message in bytes.                                        |
+| Message                 | 8000 bits, unsigned | Characters of the message. **MUST** be ASCII characters.               |
 
 The field `Message Length` **MUST NOT** be more than `1000`. The field `Message Length` **SHOULD NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
 
@@ -387,11 +387,11 @@ Exchange to request a message.
 
 #### Fields
 
-| Name     | Size               | Description                                               |
-|----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x11`.  |
-| Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
-| Received Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
+| Name                    | Size              | Description                                                            |
+| ----------------------- | ----------------- | ---------------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned  | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x11`. |
+| Last Message Identifier | 8 bits, unsigned  | Field shared with the common header `MISSING_MESSAGES`.                |
+| Received Messages       | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`.                |
 
 The field `Received Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Received Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Received Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
 
@@ -410,11 +410,11 @@ Request to notify of the health status of the client.
 
 #### Fields
 
-| Name     | Size               | Description                                               |
-|----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x20`.  |
-| Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
-| Received Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
+| Name                    | Size              | Description                                                            |
+| ----------------------- | ----------------- | ---------------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned  | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x20`. |
+| Last Message Identifier | 8 bits, unsigned  | Field shared with the common header `MISSING_MESSAGES`.                |
+| Received Messages       | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`.                |
 
 ### `HEARTBEAT_RECEIVED`
 
@@ -431,11 +431,11 @@ Response to notify that the health status was received.
 
 #### Fields
 
-| Name     | Size               | Description                                               |
-|----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x21`.  |
-| Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
-| Received Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
+| Name                    | Size              | Description                                                            |
+| ----------------------- | ----------------- | ---------------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned  | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x21`. |
+| Last Message Identifier | 8 bits, unsigned  | Field shared with the common header `MISSING_MESSAGES`.                |
+| Received Messages       | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`.                |
 
 ### `HEARTBEAT_REQUEST`
 
@@ -452,11 +452,11 @@ Push to request a health status notification.
 
 #### Fields
 
-| Name     | Size               | Description                                               |
-|----------|--------------------|-----------------------------------------------------------|
-| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x22`.  |
-| Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
-| Received Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
+| Name                    | Size              | Description                                                            |
+| ----------------------- | ----------------- | ---------------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned  | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x22`. |
+| Last Message Identifier | 8 bits, unsigned  | Field shared with the common header `MISSING_MESSAGES`.                |
+| Received Messages       | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`.                |
 
 ## State Machines
 
@@ -464,9 +464,44 @@ une pour le client, une pour le serveur (vu d’une connexion). Diagramme et tab
 
 ### Server
 
+The server maintains a state machine for each individual client connection, tracked via the client's IP address and port.
+
+#### Diagram
+
+```mermaid
+stateDiagram-v2
+	Dead
+	Alive
+	Suspicious
+	Request: Heartbeat Request
+	Wait: Wait 200 ms
+	New --> Alive: Connection accepted
+	Alive --> Dead: Connection closed
+	Alive --> Request: 1.5 seconds of inactivity
+	Suspicious --> Alive: Packet received
+	Suspicious --> Dead: Waited 3 seconds total
+	Suspicious --> Wait
+	Wait --> Request
+	Request --> Suspicious
+```
+
+#### Transition Table
+
+| Current State | Event                | Condition                  | Action                                                 | Next State |
+| ------------- | -------------------- | -------------------------- | ------------------------------------------------------ | ---------- |
+| New           | Receive packet       | Valid `CONNECTION_REQUEST` | Register client session and send `CONNECTION_ACCEPTED` | Alive      |
+| Alive         | Receive packet       | Valid packet received      | Reset inactivity timer                                 | Alive      |
+| Alive         | Timeout              | 1.5 seconds of inactivity  | Start sending `HEARTBEAT_REQ` every 200 ms             | Suspicious |
+| Suspicious    | Receive valid packet | Valid packet received      | Reset inactivity timer                                 | Alive      |
+| Suspicious    | Timeout              | 3 seconds total inactivity | Drop client, remove from participant table             | Dead       |
+| Alive         | Receive packet       | Valid `CONNECTION_CLOSED`  | Drop client, remove from participant table             | Dead       |
+
 ### Client
 
 #### Connection
+
+##### Diagram
+
 ```mermaid
 ---
 title:
@@ -485,7 +520,20 @@ stateDiagram-v2
 	Timeout --> Offline
 ```
 
+##### Transition Table
+
+| Current State | Event          | Condition                             | Action                                  | Next State |
+| ------------- | -------------- | ------------------------------------- | --------------------------------------- | ---------- |
+| Offline       | User Action    | Connect requested                     | Send `CONNECTION_REQUEST`               | Wait       |
+| Wait          | Timeout        | 1 second expires                      | Retransmit `CONNECTION_REQUEST`         | Wait       |
+| Wait          | Receive packet | `CONNECTION_ACCEPTED`                 | Stop timer, mark connection established | Online     |
+| Wait          | Receive packet | `CONNECTION_REJECTED`                 | Stop timer, notify user                 | Offline    |
+| Wait          | Timeout        | Total elapsed time reaches 10 seconds | Stop timer, report failure              | Offline    |
+
 #### Disconnection
+
+##### Diagram
+
 ```mermaid
 ---
 title:
@@ -498,7 +546,17 @@ stateDiagram-v2
 	Termination --> Offline
 ```
 
+##### Transition Table
+
+| Current State | Event       | Condition                  | Action                   | Next State  |
+| ------------- | ----------- | -------------------------- | ------------------------ | ----------- |
+| Online        | User Action | `/quit` or `/exit` command | Send `CONNECTION_CLOSED` | Termination |
+| Termination   | Cleanup     | Packet sent                | Tear down local sockets  | Offline     |
+
 #### Heartbeat
+
+##### Diagram
+
 ```mermaid
 ---
 title:
@@ -516,6 +574,16 @@ stateDiagram-v2
 	Online --> Idle: No message sent within 1 second
 	Idle --> Heartbeat
 ```
+
+##### Transition Table
+
+| Current State | Event          | Condition                        | Action                                            | Next State |
+| ------------- | -------------- | -------------------------------- | ------------------------------------------------- | ---------- |
+| Online        | Timeout        | 1 second emission inactivity     | Transition to idle state                          | Idle       |
+| Idle          | Timeout        | Ready to send heartbeat          | Send `HEARTBEAT_BROADCASTED`, start 200ms timer   | Wait       |
+| Wait          | Receive packet | `HEARTBEAT_BROADCASTED` received | Stop timer, return to online state                | Online     |
+| Wait          | Timeout        | 200ms expires without ack        | Retransmit `HEARTBEAT_BROADCASTED`, restart timer | Wait       |
+| Online        | Receive packet | `HEARTBEAT_REQUEST` received     | Immediately reply with `HEARTBEAT_BROADCASTED`    | Online     |
 
 ## Procédures
 
