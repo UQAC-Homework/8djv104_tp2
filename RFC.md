@@ -1,12 +1,10 @@
 # RFC
 
-## Résumé
+### Summary
 
-ce que fait le protocole, en quelques lignes
+This document goes over the protocol used in the chatting app. Its goal is to add connection management and reliable user message communication on top of the standard UDP protocol.
 
 ## Conventions
-
-référence à la RFC 2119, ordre des octets, notation utilisée
 
 This section will go over the conventions used in this document. It will define how a given value is written.
 
@@ -20,7 +18,7 @@ This section will go over the conventions used in this document. It will define 
 
 ### Binary Arrangement
 
-The protocol uses the [little-endian](https://en.wikipedia.org/wiki/Endianness) format.
+The protocol uses the [big-endian](https://en.wikipedia.org/wiki/Endianness) format.
 
 ### Packet Format
 
@@ -86,8 +84,6 @@ This section will go over the terminology used in this document. It will define 
 - **Push**: Defines a packet sent from a server to a client without a prior request.
 - **Exchange**: Defines a packet sent from either a server or a client to the other. A client will send to a server, and a server will send to a client.
 
-définition des termes employés (connexion, pair, paquet de données, paquet de contrôle, etc.).
-
 ## Vue d’ensemble
 
 fonctionnement général, rôles du client et du serveur.
@@ -120,24 +116,24 @@ The field `Type` **MUST NOT** be `0x0`. Any type associated with a packet type *
 
 ### `MISSING_MESSAGES`
 
-This section defines a shared header that allows to notify of missing messages. Upon receiving a packet with this header, the server **MUST** respond. Upon receiving a packet with this header, the client **MUST** respond.
+This section defines a shared header that allows to notify of missing messages.
 
 #### Format
 ```
- 0                       7 8               71
-+-------------------------+------------------+
-| Last Message Identifier | Missing Messages |
-+-------------------------+------------------+
+ 0                       7 8                71
++-------------------------+-------------------+
+| Last Message Identifier | Received Messages |
++-------------------------+-------------------+
 ```
 
 #### Fields
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
-| Last Message Identifier | 8 bits, unsigned | Identifier of the last message broadcasted. **COULD** be reused in other messages. |
-| Missing Messages | 64 bits, unsigned | Flags defining if a previous message was received. |
+| Last Message Identifier | 8 bits, unsigned | Identifier of the last received message. **COULD** be reused in other messages. |
+| Received Messages | 64 bits, unsigned | Flags defining if a previous message was received. |
 
-The field `Missing Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Missing Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Missing Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
+The field `Received Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Received Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Received Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
 
 #### Examples
 
@@ -145,21 +141,21 @@ Example of the header:
 
 ```
 36							Last Message Identifier
-00 00 01 00 00 00 20 39		Missing Messages
+FF FF FE FF FF FF DF C6		Received Messages
 ```
 
 Example of how the missing messages with the identifiers `53`, `50`, `49`, `48`, `40` and `13` from the last message with the identifier `54` are requested:
 ```
-Bytes: 36 00 00 01 00 00 00 20 39
-Bits: 0 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 1 1 1 0 0 1
+Bytes: 36 FF FF FE FF FF FF DF C6
+Bits: 0 0 1 1 0 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 0 0 0 1 1 0
 
 Grouped Bits:
 	- Last Message Identifier: 0 0 1 1 0 1 1 0
-	- Missing Messages: 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 1 1 1 0 0 1
+	- Received Messages: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 0 0 0 1 1 0
 
 Last Message Identifier: 54
-Missing Messages:
-	0   0  0  0  0  0  0  0  0  0  0 0 0 0 0 0 0 0 0 0 0  0  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  1  0  0  0  0  0  0  0  1  1  1  0  0  1 
+Received Messages:
+	1   1  1  1  1  1  1  1  1  1  1 1 1 1 1 1 1 1 1 1 1  1  1  0  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  0  1  1  1  1  1  1  1  0  0  0  1  1  0
 	-10 -9 -8 -7 -6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53
 	|____________________________|                              |                                                                                |                       |  |  |        |
 				  |                                             \________________________________________________________________________________|_______________________|__|__|________/
@@ -302,12 +298,12 @@ Exchange to broadcast a new message.
 #### Format
 
 ```
- 0      7 8              13 14                21 22            31
-+--------+-----------------+--------------------+----------------+
-|  Type  | User Identifier | Message Identifier | Message Length |
-+--------+-----------------+--------------------+----------------+
+ 0      7 8              13 14                     21 22               85 86                93 94           103
++--------+-----------------+-------------------------+-------------------+--------------------+----------------+
+|  Type  | User Identifier | Last Message Identifier | Received Messages | Message Identifier | Message Length |
++--------+-----------------+-------------------------+-------------------+--------------------+----------------+
 
- 31   8191
+ 104  8103
 +---------+
 | Message |
 +---------+
@@ -319,14 +315,15 @@ Exchange to broadcast a new message.
 |----------|--------------------|-----------------------------------------------------------|
 | Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x10`.  |
 | User Identifier | 6 bits, unsigned | Unique identifier for the local user. |
+| Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
+| Received Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
 | Message Identifier | 8 bits, unsigned | Identifier of the message. **COULD** be reused in other messages. |
 | Message Length | 10 bits, unsigned | Length of the message in bytes. |
-| Message | 8160 bits, unsigned | Characters of the message. **MUST** be ASCII characters. |
+| Message | 8000 bits, unsigned | Characters of the message. **MUST** be ASCII characters. |
 
-The field `Message Length` **MUST NOT** be more than `1020`. Any greater length **MUST** be truncated to `1020`. The field `Message Length` **SHOULD NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
+The field `Message Length` **MUST NOT** be more than `1000`. The field `Message Length` **SHOULD NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
 
-The field `Message` **MUST** be of length defined by the field `Message Length`. The protocol **MUST NOT** assume that the field takes the full possible length. For a message of three (3) characters, the total size of the field `Message` will be `24` bits.
-
+The field `Message` **MUST** be of length defined by the field `Message Length`. The server **MUST** discard any message that exceeds `1000` characters. The protocol **MUST NOT** assume that the field takes the full possible length. For a message of three (3) characters, the total size of the field `Message` will be `24` bits.
 
 #### Examples
 
@@ -376,10 +373,10 @@ Exchange to request a message.
 #### Format
 
 ```
- 0      7 8                      15 16              79
-+--------+-------------------------+------------------+
-|  Type  | Last Message Identifier | Missing Messages |
-+--------+-------------------------+------------------+
+ 0      7 8                      15 16               79
++--------+-------------------------+-------------------+
+|  Type  | Last Message Identifier | Received Messages |
++--------+-------------------------+-------------------+
 ```
 
 #### Fields
@@ -388,9 +385,9 @@ Exchange to request a message.
 |----------|--------------------|-----------------------------------------------------------|
 | Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x11`.  |
 | Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
-| Missing Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
+| Received Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
 
-The field `Missing Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Missing Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Missing Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
+The field `Received Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Received Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Received Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
 
 ### `HEARTBEAT_BROADCASTED`
 
@@ -399,10 +396,10 @@ Request to notify of the health status of the client.
 #### Format
 
 ```
- 0      7 
-+--------+
-|  Type  |
-+--------+
+ 0      7 8                      15 16               79
++--------+-------------------------+-------------------+
+|  Type  | Last Message Identifier | Received Messages |
++--------+-------------------------+-------------------+
 ```
 
 #### Fields
@@ -410,6 +407,8 @@ Request to notify of the health status of the client.
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
 | Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x20`.  |
+| Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
+| Received Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
 
 ### `HEARTBEAT_RECEIVED`
 
@@ -418,10 +417,10 @@ Response to notify that the health status was received.
 #### Format
 
 ```
- 0      7 
-+--------+
-|  Type  |
-+--------+
+ 0      7 8                      15 16               79
++--------+-------------------------+-------------------+
+|  Type  | Last Message Identifier | Received Messages |
++--------+-------------------------+-------------------+
 ```
 
 #### Fields
@@ -429,6 +428,8 @@ Response to notify that the health status was received.
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
 | Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x21`.  |
+| Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
+| Received Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
 
 ### `HEARTBEAT_REQUEST`
 
@@ -437,10 +438,10 @@ Push to request a health status notification.
 #### Format
 
 ```
- 0      7 
-+--------+
-|  Type  |
-+--------+
+ 0      7 8                      15 16               79
++--------+-------------------------+-------------------+
+|  Type  | Last Message Identifier | Received Messages |
++--------+-------------------------+-------------------+
 ```
 
 #### Fields
@@ -448,8 +449,12 @@ Push to request a health status notification.
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
 | Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x22`.  |
+| Last Message Identifier | 8 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
+| Received Messages | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`. |
 
 ## State Machines
+
+une pour le client, une pour le serveur (vu d’une connexion). Diagramme et table de transitions.
 
 ### Server
 
@@ -505,10 +510,6 @@ stateDiagram-v2
 	Online --> Idle: No message sent within 1 second
 	Idle --> Heartbeat
 ```
-
-## Machines à états
-
-une pour le client, une pour le serveur (vu d’une connexion). Diagramme et table de transitions.
 
 ## Procédures
 
