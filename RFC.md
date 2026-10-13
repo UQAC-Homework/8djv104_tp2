@@ -82,10 +82,8 @@ This document uses transition tables to display how a state machine transitions 
 
 This section will go over the terminology used in this document. It will define what certain terms mean in the context of this document.
 
-- **MUST**: Defines a behavior that is required to be implemented. The protocol will not work properly if the behavior is missing or altered.
-- **MUST NOT**: Defines a behavior that is required to be missing. The protocol will not work properly if the behavior is implemented.
-- **SHOULD**: Defines a suggested behavior. The protocol will work if a behavior is implemented or not. However, the protocol assumes that the suggested behavior is the one used. A custom behavior will not be able to be used by the protocol.
-- **COULD**: Defines a potential behavior. The protocol will work if a behavior is implemented or not. The protocol will assume that no implementation was defined, and the behavior will be ignored.
+The key words “MUST”, “MUST NOT”, “SHOULD”, “SHOULD NOT” and “MAY” in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
+
 - **Upper [X]**: Defines the first instance of `[X]` starting from the most significant bit.
 - **Lower [X]**: Defines the first instance of `[X]` starting from the least significant bit.
 - **Tayste**: Defines a group of two (2) consecutive bits.
@@ -147,7 +145,7 @@ This section defines a shared header that allows to notify of missing messages.
 
 | Name                    | Size              | Description                                                                     |
 | ----------------------- | ----------------- | ------------------------------------------------------------------------------- |
-| Last Message Identifier | 8 bits, unsigned  | Identifier of the last received message. **COULD** be reused in other messages. |
+| Last Message Identifier | 8 bits, unsigned  | Identifier of the last received message. **MAY** be reused in other messages. |
 | Received Messages       | 64 bits, unsigned | Flags defining if a previous message was received.                              |
 
 The field `Received Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Received Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Received Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
@@ -218,7 +216,7 @@ The field `Username` **MUST** be of length defined by the field `Length`. The pr
 
 Each character of the field `Username` **MUST** is one (1) byte in length. Since the field `Username` begins at a four (4) bits offset, each character **MUST** span across two (2) adjacent packet bytes. The upper nybble of the character **MUST** be written on the lower nybble of the first byte. The lower nybble of the character **MUST** be written on the upper nybble of the second byte.
 
-The last nybble of the packet is unused. The protocol has no behavior logic defined for that data. The client **COULD** choose to set it, but **MUST NOT** assume that the server will read it. The server **SHOULD** ignore it.
+The last nybble of the packet is unused. The protocol has no behavior logic defined for that data. The client **MAY** choose to set it, but **MUST NOT** assume that the server will read it. The server **SHOULD** ignore it.
 
 #### Examples
 
@@ -334,7 +332,7 @@ Exchange to broadcast a message.
 | User Identifier         | 6 bits, unsigned    | Unique identifier for the local user.                                  |
 | Last Message Identifier | 8 bits, unsigned    | Field shared with the common header `MISSING_MESSAGES`.                |
 | Received Messages       | 64 bits, unsigned   | Field shared with the common header `MISSING_MESSAGES`.                |
-| Message Identifier      | 8 bits, unsigned    | Identifier of the message. **COULD** be reused in other messages.      |
+| Message Identifier      | 8 bits, unsigned    | Identifier of the message. **MAY** be reused in other messages.      |
 | Message Length          | 10 bits, unsigned   | Length of the message in bytes.                                        |
 | Message                 | 8000 bits, unsigned | Characters of the message. **MUST** be ASCII characters.               |
 
