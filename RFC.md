@@ -320,7 +320,7 @@ Message:
 
 Exchange to request a message.
 
-### Format
+#### Format
 
 ```
  0      7 8                      15 16              79
@@ -329,7 +329,7 @@ Exchange to request a message.
 +--------+-------------------------+------------------+
 ```
 
-### Fields
+#### Fields
 
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
@@ -339,7 +339,7 @@ Exchange to request a message.
 
 The field `Missing Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Missing Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Missing Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
 
-### Examples
+#### Examples
 
 Example of a packet:
 
@@ -369,6 +369,63 @@ Missing Messages:
 				  |                                                                                                       |
 				ignored																									missing		
 ```
+
+### `HEARTBEAT_BROADCASTED`
+
+Request to notify of the health status of the client.
+
+#### Format
+
+```
+ 0      7 
++--------+
+|  Type  |
++--------+
+```
+
+#### Fields
+
+| Name     | Size               | Description                                               |
+|----------|--------------------|-----------------------------------------------------------|
+| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x20`.  |
+
+### `HEARTBEAT_RECEIVED`
+
+Response to notify that the health status was received.
+
+#### Format
+
+```
+ 0      7 
++--------+
+|  Type  |
++--------+
+```
+
+#### Fields
+
+| Name     | Size               | Description                                               |
+|----------|--------------------|-----------------------------------------------------------|
+| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x21`.  |
+
+### `HEARTBEAT_REQUEST`
+
+Push to request a health status notification.
+
+#### Format
+
+```
+ 0      7 
++--------+
+|  Type  |
++--------+
+```
+
+#### Fields
+
+| Name     | Size               | Description                                               |
+|----------|--------------------|-----------------------------------------------------------|
+| Type     | 8 bits, unsigned   | Field shared with the common header. **MUST** be `0x22`.  |
 
 ## Machines à états
 
