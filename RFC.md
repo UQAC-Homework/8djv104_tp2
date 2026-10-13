@@ -546,24 +546,20 @@ stateDiagram-v2
 ##### Diagram
 
 ```mermaid
----
-title:
----
 stateDiagram-v2
-	Offline
-	Online
-	Termination: Send connection termination
-	Online --> Termination: User request termination
-	Termination --> Offline
+    Online --> Termination: User request termination
+    Online --> Termination: Receive CONNECTION_CLOSED
+    Termination --> Offline: Sockets torn down
 ```
 
 ##### Transition Table
 
-| Current State | Event       | Condition                  | Action                   | Next State  |
-| ------------- | ----------- | -------------------------- | ------------------------ | ----------- |
-| Online        | User Action | `/quit` or `/exit` command | Send `CONNECTION_CLOSED` | Termination |
-| Termination   | Cleanup     | Packet sent                | Tear down local sockets  | Offline     |
-
+| Current State | Event       | Condition                    | Action                     | Next State  |
+| ------------- | ----------- | ---------------------------- | -------------------------- | ----------- |
+| Online        | User Action | User requested termination   | Send `CONNECTION_CLOSED`   | Termination |
+| Online        | Packet      | Received `CONNECTION_CLOSED` | Notify user of termination | Termination |
+| Termination   | Internal    | Action executed              | Tear down local sockets    | Offline     |
+	
 #### Heartbeat
 
 ##### Diagram
