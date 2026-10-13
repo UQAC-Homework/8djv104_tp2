@@ -67,6 +67,17 @@ The example will display the format of a packet with the following fields:
 +--------+
 ```
 
+### State Transition Table
+
+This document uses transition tables to display how a state machine transitions between states.
+
+#### Events
+
+- **User Action**: Triggered by a manual action of the user
+- **Packet**: Triggered by the receipt of a valid packet
+- **Timer**: Triggered by the expiration of a timer
+- **Internal**: Triggered by the execution of the previous state
+
 ## Terminology
 
 This section will go over the terminology used in this document. It will define what certain terms mean in the context of this document.
