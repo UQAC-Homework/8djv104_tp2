@@ -141,9 +141,7 @@ The field `Missing Messages` **MUST** be ordered starting from the least signifi
 
 #### Examples
 
-#### Examples
-
-Example of a packet:
+Example of the header:
 
 ```
 36							Last Message Identifier
@@ -450,6 +448,63 @@ Push to request a health status notification.
 | Name     | Size               | Description                                               |
 |----------|--------------------|-----------------------------------------------------------|
 | Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x22`.  |
+
+## State Machines
+
+### Server
+
+### Client
+
+#### Connection
+```mermaid
+---
+title:
+---
+stateDiagram-v2
+	Offline
+	Online
+	Connect: Send connection request
+	Wait: Wait 1 second
+	Offline --> Connect: Request connection
+	Connect --> Wait
+	Wait --> Connect
+	Wait --> Online: Connection accepted
+	Wait --> Offline: Connection rejected
+	Wait --> Timeout: Waited 10 seconds total
+	Timeout --> Offline
+```
+
+#### Disconnection
+```mermaid
+---
+title:
+---
+stateDiagram-v2
+	Offline
+	Online
+	Termination: Send connection termination
+	Online --> Termination: User request termination
+	Termination --> Offline
+```
+
+#### Heartbeat
+```mermaid
+---
+title:
+---
+stateDiagram-v2
+	Online
+	Idle
+	Heartbeat: Send heartbeat
+	Request: Heartbeat Request
+	Wait: Wait 200 ms
+	Request --> Heartbeat
+	Heartbeat --> Wait
+	Wait --> Heartbeat: Heartbeat not received
+	Wait --> Online: Heartbeat received
+	Online --> Idle: No message sent within 1 second
+	Idle --> Heartbeat
+```
 
 ## Machines à états
 
