@@ -1,6 +1,6 @@
 # RFC
 
-### Summary
+## Summary
 
 This document goes over the protocol used in the chatting app. Its goal is to add connection management and reliable user message communication on top of the standard UDP protocol.
 
@@ -84,9 +84,15 @@ This section will go over the terminology used in this document. It will define 
 - **Push**: Defines a packet sent from a server to a client without a prior request.
 - **Exchange**: Defines a packet sent from either a server or a client to the other. A client will send to a server, and a server will send to a client.
 
-## Vue d’ensemble
+## Overview
 
-fonctionnement général, rôles du client et du serveur.
+This protocol provides a reliable communication layer for a chat application running over the UDP protocol.
+
+Due to raw UDP not guaranteeing delivery or connection state, this protocol introduces explicit handshakes, retransmissions for lost messages and periodic heartbeats.
+
+The client is responsible for connecting to the server, sending sequenced messages, keeping track of a message history for packet recovery and maintaining liveness through heartbeats.
+
+The server is responsible to identifying incoming connections, broadcasting messages between clients and managing client connection states.
 
 ## Headers
 
