@@ -129,7 +129,7 @@ packet is subjected to the rules of this header.
 | ---- | ---------------- | --------------------------------------------------- |
 | Type | 8 bits, unsigned | Magic number used to define the type of the packet. |
 
-The field `Type` **MUST NOT** be `0x0`. Any type associated with a packet type **MUST** be supported. An unsupported type **SHOULD** be ignored.
+The field `Type` **MUST NOT** be `0x0`. Any type associated with a packet type **MUST** be supported. An unsupported type **MUST** be ignored.
 
 ### `MISSING_MESSAGES`
 
@@ -338,7 +338,7 @@ Exchange to broadcast a message.
 | Message Length          | 10 bits, unsigned   | Length of the message in bytes.                                        |
 | Message                 | 8000 bits, unsigned | Characters of the message. **MUST** be ASCII characters.               |
 
-The field `Message Length` **MUST NOT** be more than `1000`. The field `Message Length` **SHOULD NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
+The field `Message Length` **MUST NOT** be more than `1000`. The field `Message Length` **MUST NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
 
 The field `Message` **MUST** be of length defined by the field `Message Length`. The server **MUST** discard any message that exceeds `1000` characters. The protocol **MUST NOT** assume that the field takes the full possible length. For a message of three (3) characters, the total size of the field `Message` will be `24` bits.
 
@@ -374,7 +374,7 @@ Hexadecimal Grouped Bits:
 	- Message Length: 0B
 	- Message: 48 65 6C 6C 6F 20 57 6F 72 6C 64
 
-Type: 32
+Type: 16
 User Identifier: 37
 Message Identifier: 0
 Message Length: 11
@@ -503,13 +503,14 @@ stateDiagram-v2
 | Current State | Event    | Condition                              | Action                                      | Next State |
 | ------------- | -------- | -------------------------------------- | ------------------------------------------- | ---------- |
 | New           | Packet   | Received accepted `CONNECTION_REQUEST` | Send `CONNECTION_ACCEPTED`, register client | Alive      |
-| New           | Internal | Received rejected `CONNECTION_REQUEST` | Send `CONNECTION_REJECTED`                  | Terminated |
+| New           | Packet   | Received rejected `CONNECTION_REQUEST` | Send `CONNECTION_REJECTED`                  | Terminated |
 | Alive         | Timer    | Inactivity timer expired               | Send `HEARTBEAT_REQUEST`                    | Suspicious |
 | Alive         | Packet   | Received `CONNECTION_CLOSED`           | Unregister client                           | Dead       |
-| Suspicious    | Packet   | Received `HEARTBEAT_BROADCAST`         | None                                        | Alive      |
-| Suspicious    | Packet   | Received any valid packet              | None                                        | Alive      |
-| Suspicious    | Timer    | Timeout timer expired                  | Unregister client                           | Dead       |
-| Dead          | Internal | Action Executed                        | Tear down socket                            | Terminated |
+| Suspicious    | Timer    | 200 milliseconds timer expired         | Send `HEARTBEAT_REQUEST`                    | Suspicious |
+| Suspicious    | Packet   | Received `HEARTBEAT_BROADCAST`         | Send `HEARTBEAT_RECEIVED`                   | Alive      |
+| Suspicious    | Packet   | Received any valid packet              | Pass received package to next state         | Alive      |
+| Suspicious    | Timer    | 3 seconds timer expired                | Unregister client                           | Dead       |
+| Dead          | Internal | Action Executed                        | Clean client resources                      | Terminated |
 
 ### Client
 
@@ -586,8 +587,9 @@ stateDiagram-v2
 | Online        | Timer  | 1 second timer expired         | Send `HEARTBEAT_BROADCAST` | Wait       |
 | Online        | Packet | Received `HEARTBEAT_REQUEST`   | Send `HEARTBEAT_BROADCAST` | Online     |
 | Wait          | Packet | Received `HEARTBEAT_RECEIVED`  | None                       | Online     |
+| Wait          | Packet | Received `HEARTBEAT_REQUEST`   | Send `HEARTBEAT_BROADCAST` | Online     |
 | Wait          | Timer  | 200 milliseconds timer expired | Send `HEARTBEAT_BROADCAST` | Wait       |
-| Wait          | Timer  | 30 seconds timer expired       | Send `CONNECTION_CLOSED`   | Offline    |
+| Wait          | Timer  | 3 seconds timer expired        | Send `CONNECTION_CLOSED`   | Offline    |
 
 #### Data Transfer
 
