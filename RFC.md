@@ -527,17 +527,17 @@ stateDiagram-v2
 
 #### Transition Table
 
-| Current State | Event    | Condition                              | Action                                      | Next State |
-| ------------- | -------- | -------------------------------------- | ------------------------------------------- | ---------- |
-| New           | Packet   | Received accepted `CONNECTION_REQUEST` | Send `CONNECTION_ACCEPTED`, register client | Alive      |
-| New           | Packet   | Received rejected `CONNECTION_REQUEST` | Send `CONNECTION_REJECTED`                  | Terminated |
-| Alive         | Timer    | Inactivity timer expired               | Send `HEARTBEAT_REQUEST`                    | Suspicious |
-| Alive         | Packet   | Received `CONNECTION_CLOSED`           | Unregister client                           | Dead       |
-| Suspicious    | Timer    | 200 milliseconds timer expired         | Send `HEARTBEAT_REQUEST`                    | Suspicious |
-| Suspicious    | Packet   | Received `HEARTBEAT_BROADCAST`         | Send `HEARTBEAT_RECEIVED`                   | Alive      |
-| Suspicious    | Packet   | Received any valid packet              | Pass received package to next state         | Alive      |
-| Suspicious    | Timer    | 3 seconds timer expired                | Unregister client                           | Dead       |
-| Dead          | Internal | Action Executed                        | Clean client resources                      | Terminated |
+| Current State | Event    | Condition                                  | Action                                      | Next State |
+| ------------- | -------- | ------------------------------------------ | ------------------------------------------- | ---------- |
+| New           | Packet   | Received accepted `CONNECTION_REQUEST`     | Send `CONNECTION_ACCEPTED`, register client | Alive      |
+| New           | Packet   | Received rejected `CONNECTION_REQUEST`     | Send `CONNECTION_REJECTED`                  | Terminated |
+| Alive         | Timer    | `CLIENT_INACTIVITY_WARNING` timer expired  | Send `HEARTBEAT_REQUEST`                    | Suspicious |
+| Alive         | Packet   | Received `CONNECTION_CLOSED`               | Unregister client                           | Dead       |
+| Suspicious    | Timer    | `HEARTBEAT_REQUEST_INTERVAL` timer expired | Send `HEARTBEAT_REQUEST`                    | Suspicious |
+| Suspicious    | Packet   | Received `HEARTBEAT_BROADCAST`             | Send `HEARTBEAT_RECEIVED`                   | Alive      |
+| Suspicious    | Packet   | Received any valid packet                  | Pass received package to next state         | Alive      |
+| Suspicious    | Timer    | `CLIENT_INACTIVITY_TIMEOUT` timer expired  | Unregister client                           | Dead       |
+| Dead          | Internal | Action Executed                            | Clean client resources                      | Terminated |
 
 ### Client
 
@@ -558,15 +558,15 @@ stateDiagram-v2
 
 ##### Transition Table
 
-| Current State | Event       | Condition                      | Action                       | Next State |
-| ------------- | ----------- | ------------------------------ | ---------------------------- | ---------- |
-| Offline       | User Action | User requested connection      | Send `CONNECTION_REQUEST`    | Connecting |
-| Connecting    | Packet      | Received `CONNECTION_REJECTED` | Notify user of rejection     | Offline    |
-| Connecting    | Packet      | Received `CONNECTION_ACCEPTED` | Notify user of success       | Online     |
-| Connecting    | Timer       | 1 second timer expired         | Send `CONNECTION_REQUEST`    | Connecting |
-| Connecting    | Timer       | 10 seconds timer expired       | Notify user of failure       | Offline    |
-| Online        | Packet      | Received `CONNECTION_CLOSED`   | Notify user of disconnection | Offline    |
-| Online        | User Action | User requested disconnection   | Send `CONNECTION_CLOSED`     | Offline    |
+| Current State | Event       | Condition                                  | Action                       | Next State |
+| ------------- | ----------- | ------------------------------------------ | ---------------------------- | ---------- |
+| Offline       | User Action | User requested connection                  | Send `CONNECTION_REQUEST`    | Connecting |
+| Connecting    | Packet      | Received `CONNECTION_REJECTED`             | Notify user of rejection     | Offline    |
+| Connecting    | Packet      | Received `CONNECTION_ACCEPTED`             | Notify user of success       | Online     |
+| Connecting    | Timer       | `SERVER_CONNECTION_INTERVAL` timer expired | Send `CONNECTION_REQUEST`    | Connecting |
+| Connecting    | Timer       | `SERVER_CONNECTION_TIMEOUT` timer expired  | Notify user of failure       | Offline    |
+| Online        | Packet      | Received `CONNECTION_CLOSED`               | Notify user of disconnection | Offline    |
+| Online        | User Action | User requested disconnection               | Send `CONNECTION_CLOSED`     | Offline    |
 
 #### Disconnection
 
@@ -604,14 +604,14 @@ stateDiagram-v2
 
 ##### Transition Table
 
-| Current State | Event  | Condition                      | Action                     | Next State |
-| ------------- | ------ | ------------------------------ | -------------------------- | ---------- |
-| Online        | Timer  | 1 second timer expired         | Send `HEARTBEAT_BROADCAST` | Wait       |
-| Online        | Packet | Received `HEARTBEAT_REQUEST`   | Send `HEARTBEAT_BROADCAST` | Online     |
-| Wait          | Packet | Received `HEARTBEAT_RECEIVED`  | None                       | Online     |
-| Wait          | Packet | Received `HEARTBEAT_REQUEST`   | Send `HEARTBEAT_BROADCAST` | Online     |
-| Wait          | Timer  | 200 milliseconds timer expired | Send `HEARTBEAT_BROADCAST` | Wait       |
-| Wait          | Timer  | 3 seconds timer expired        | Send `CONNECTION_CLOSED`   | Offline    |
+| Current State | Event  | Condition                                         | Action                     | Next State |
+| ------------- | ------ | ------------------------------------------------- | -------------------------- | ---------- |
+| Online        | Timer  | `INACTIVITY_WARNING` timer expired                | Send `HEARTBEAT_BROADCAST` | Wait       |
+| Online        | Packet | Received `HEARTBEAT_REQUEST`                      | Send `HEARTBEAT_BROADCAST` | Online     |
+| Wait          | Packet | Received `HEARTBEAT_RECEIVED`                     | None                       | Online     |
+| Wait          | Packet | Received `HEARTBEAT_REQUEST`                      | Send `HEARTBEAT_BROADCAST` | Online     |
+| Wait          | Timer  | `HEARTBEAT_INTERVAL` timer expired                | Send `HEARTBEAT_BROADCAST` | Wait       |
+| Wait          | Timer  | `SERVER_INACTIVITY_TIMEOUT` seconds timer expired | Send `CONNECTION_CLOSED`   | Offline    |
 
 #### Data Transfer
 
@@ -637,9 +637,22 @@ stateDiagram-v2
 
 établissement, terminaison, heartbeat, numérotation, NACK, retransmission.
 
-## Temporisateurs et constantes
+## Constants
 
-tableau récapitulatif de toutes les valeurs.
+This section will go over the different constants defined by the protocol. A server or a client **MAY** change the values of any constant.
+
+| Name                         | Default Value    | Description                                                              |
+| ---------------------------- | ---------------- | ------------------------------------------------------------------------ |
+| `HEARTBEAT_INTERVAL`         | 200 milliseconds | Interval on which the client **MUST** send a heartbeat                   |
+| `HEARTBEAT_REQUEST_INTERVAL` | 200 milliseconds | Interval on which the server **MUST** send a heartbeat request           |
+| `INACTIVITY_WARNING`         | 1 second         | Time needed before a client **MUST** start sending heartbeats            |
+| `CLIENT_INACTIVITY_WARNING`  | 1.5 seconds      | Time needed before a server **MUST** warn a client about its inactivity  |
+| `CLIENT_INACTIVITY_TIMEOUT`  | 3 seconds        | Time needed before a server **MUST** disconnect a client from inactivity |
+| `SERVER_INACTIVITY_TIMEOUT`  | 3 seconds        | Time needed before a client **MUST** disconnect from unreachable server  |
+| `SERVER_CONNECTION_INTERVAL` | 1 second         | Interval on which the client **MUST** retry to send a connection request |
+| `SERVER_CONNECTION_TIMEOUT`  | 10 seconds       | Time needed before a client **MUST** declare a server as unreachable     |
+
+A server or a client **MUST NOT** assume that the constant values are the default values defined by the protocol.
 
 ## Gestion des erreurs
 
