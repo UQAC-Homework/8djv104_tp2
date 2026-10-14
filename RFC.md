@@ -84,6 +84,9 @@ This section will go over the terminology used in this document. It will define 
 
 The key words “MUST”, “MUST NOT”, “SHOULD”, “SHOULD NOT” and “MAY” in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
+- **Client**: Defines an instance of the client-side services
+- **Server**: Defines an instance of the server-side services
+- **User**: Defines an active connection between a client and a server
 - **Packet**: Defines a standalone group of consecutive bits sent by the network.
 - **Header**: Defines a shared group of consecutive bits sent by the network.
 - **Upper [X]**: Defines the first instance of `[X]` starting from the most significant bit.
