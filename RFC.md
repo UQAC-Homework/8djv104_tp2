@@ -657,9 +657,21 @@ This section will go over the different constants defined by the protocol. A ser
 
 A server or a client **MUST NOT** assume that the constant values are the default values defined by the protocol.
 
-## Gestion des erreurs
+## Error management
 
-paquets malformés, inconnus, dupliqués, hors connexion, etc.
+This section will go over how the server and the client must manage erroneous packets.
+
+Unless a server or a client is mentioned, any rule given **MUST** be applied to the server and the client.
+
+### Malformed Packets
+
+When a malformed packet is received, the packet **MUST** be discarded.
+
+### Unknown Packet Sources
+
+When the server receives a `CONNECTION_REQUEST` from a unknown source, the server **MUST** follow the connection procedure.
+
+When another type of packet is received from a unknown source, the packet **MUST** be discarded. The packet type **MAY** be defined, but **MUST NOT** be handled within the context of the current state.
 
 ## Exemples d’échanges
 
