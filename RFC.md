@@ -67,7 +67,17 @@ The example will display the format of a packet with the following fields:
 +--------+
 ```
 
-### State Transition Table
+### State Machines
+
+This document uses state machines to display the overall flow of the application.
+
+#### Transitions
+
+A transition starting from and ending to the same state will not be displayed. If a self transition is present, it will only be defined within the state transition table.
+
+Multiple transitions starting from a state and ending to a state will be displayed as long as the events or conditions are different. If multiple transitions have identical events and conditions, only one transition will be displayed. This transition will use a general label that describes the transitions it replaces. The original transitions will only be defined individually within the state transition table.
+
+### State Transition Tables
 
 This document uses transition tables to display how a state machine transitions between states.
 
@@ -333,7 +343,7 @@ Exchange to notify that the connection is closed.
 | Type            | 8 bits, unsigned | Field defined in the header `PACKET_TYPE`. **MUST** be `0x02`. |
 | User Identifier | 6 bits, unsigned | Field defined in the header `USER_AUTHENTICATION`.             |
 
-The field `User Identifier` **MUST** be ignored when this packet is received from the server.
+The field `User Identifier` **MUST** be ignored when this packet is sent by the server.
 
 ### `MESSAGE_BROADCAST`
 
@@ -435,7 +445,7 @@ Exchange to request a message.
 | Last Message Identifier | 8 bits, unsigned  | Field defined in the header `MISSING_MESSAGES`.                |
 | Received Messages       | 64 bits, unsigned | Field defined in the header `MISSING_MESSAGES`.                |
 
-The field `User Identifier` **MUST** be ignored when this packet is received from the server.
+The field `User Identifier` **MUST** be ignored when this packet is sent by the server.
 
 ### `HEARTBEAT_BROADCAST`
 
