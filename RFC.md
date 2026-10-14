@@ -500,8 +500,6 @@ Push to request a health status notification.
 
 ## State Machines
 
-une pour le client, une pour le serveur (vu d’une connexion). Diagramme et table de transitions.
-
 ### Server
 
 The server maintains a state machine for each individual client connection, tracked via the client's IP address and port.
@@ -550,30 +548,25 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> Offline
-    Offline --> Wait: User requested connection
-    
-    state Wait {
-		Retransmit: Resend Request
-        [*] --> Idle
-        Idle --> Retransmit: Retry timer expired
-    }
-    
-    Wait --> Online: Received CONNECTION_ACCEPTED
-    Wait --> Offline: Received CONNECTION_REJECTED
-    Wait --> Offline: Timeout timer expired
+    Offline --> Connecting: User requested connection
+    Connecting --> Online: Received CONNECTION_ACCEPTED
+    Connecting --> Offline: Received CONNECTION_REJECTED
+    Connecting --> Offline: Timeout timer expired
     
     Online --> Offline: Connection Closed
 ```
 
 ##### Transition Table
 
-| Current State | Event       | Condition                      | Action                    | Next State |
-| ------------- | ----------- | ------------------------------ | ------------------------- | ---------- |
-| Offline       | User Action | User requested connection      | Send `CONNECTION_REQUEST` | Wait       |
-| Wait          | Packet      | Received `CONNECTION_REJECTED` | Notify user of rejection  | Offline    |
-| Wait          | Packet      | Received `CONNECTION_ACCEPTED` | Notify user of success    | Online     |
-| Wait          | Timer       | 1 second timer expired         | Send `CONNECTION_REQUEST` | Wait       |
-| Wait          | Timer       | 10 seconds timer expired       | Notify user of failure    | Offline    |
+| Current State | Event       | Condition                      | Action                       | Next State |
+| ------------- | ----------- | ------------------------------ | ---------------------------- | ---------- |
+| Offline       | User Action | User requested connection      | Send `CONNECTION_REQUEST`    | Connecting |
+| Connecting    | Packet      | Received `CONNECTION_REJECTED` | Notify user of rejection     | Offline    |
+| Connecting    | Packet      | Received `CONNECTION_ACCEPTED` | Notify user of success       | Online     |
+| Connecting    | Timer       | 1 second timer expired         | Send `CONNECTION_REQUEST`    | Connecting |
+| Connecting    | Timer       | 10 seconds timer expired       | Notify user of failure       | Offline    |
+| Online        | Packet      | Received `CONNECTION_CLOSED`   | Notify user of disconnection | Offline    |
+| Online        | User Action | User requested disconnection   | Send `CONNECTION_CLOSED`     | Offline    |
 
 #### Disconnection
 
