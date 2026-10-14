@@ -6,7 +6,7 @@ This document goes over the protocol used in the chatting app. Its goal is to ad
 
 ## Conventions
 
-This section will go over the conventions used in this document. It will define how a given value is written.
+This section will go over the conventions used in this document. It will give definitions and guidelines in order to keep the document consistent and understandable.
 
 ### Numbers
 
@@ -26,17 +26,17 @@ This document displays packets using a custom format.
 
 #### Rules
 
-- Each field is displayed in order
-- Each field must have the starting bit offset above the box and to its most left
-- Each field must have the ending bit offset above the box and to its most right
-- Each offset must start from the start of the packet
-- The box with a starting or ending offset that exceeds a multiple of 128 creates and starts a new row under the previous row
-- Each field must display their name within the box
-- Box must be at least as long as the name, with a padding on the left and the right
-- Each field is displayed using a box defined with ASCII characters
-- Corners of the box must use the `+` symbol
-- Vertical sides of the box must use the `|` symbol
-- Horizontal sides of the box must use the `-` symbol
+- Each field is displayed in order.
+- Each field must have the starting bit offset above the box and to its most left.
+- Each field must have the ending bit offset above the box and to its most right.
+- Each offset must start from the start of the packet.
+- Each field is displayed using a box defined with ASCII characters.
+- The box with a starting or ending offset that exceeds a multiple of 128 creates and starts a new row under the previous row.
+- Each field must display their name within the box.
+- The box must be at least as long as the name, with a padding on the left and the right.
+- Corners of the box must use the `+` symbol.
+- Vertical sides of the box must use the `|` symbol.
+- Horizontal sides of the box must use the `-` symbol.
 
 #### Examples
 
@@ -73,10 +73,10 @@ This document uses transition tables to display how a state machine transitions 
 
 #### Events
 
-- **User Action**: Triggered by a manual action of the user
-- **Packet**: Triggered by the receipt of a valid packet
-- **Timer**: Triggered by the expiration of a timer
-- **Internal**: Triggered by the execution of the previous state
+- **User Action**: Triggered by a manual action of the user.
+- **Packet**: Triggered by the receipt of a valid packet. If a type is given, only valid packet of the given type can be used.
+- **Timer**: Triggered by the expiration of a timer.
+- **Internal**: Triggered by the execution of the previous state.
 
 ## Terminology
 
@@ -84,14 +84,16 @@ This section will go over the terminology used in this document. It will define 
 
 The key words “MUST”, “MUST NOT”, “SHOULD”, “SHOULD NOT” and “MAY” in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
+- **Packet**: Defines a standalone group of consecutive bits sent by the network.
+- **Header**: Defines a shared group of consecutive bits sent by the network.
 - **Upper [X]**: Defines the first instance of `[X]` starting from the most significant bit.
-- **Lower [X]**: Defines the first instance of `[X]` starting from the least significant bit.
+- **Lower [X]**: Defines the first instance of `[X]` ending at the least significant bit.
 - **Tayste**: Defines a group of two (2) consecutive bits.
 - **Nybble**: Defines a group of four (4) consecutive bits.
 - **Request**: Defines a packet sent from a client to a server.
-- **Response**: Defines a packet sent from a server to a client in response to a prior request.
+- **Response**: Defines a packet sent from a server to a client in regard to a prior request.
 - **Push**: Defines a packet sent from a server to a client without a prior request.
-- **Exchange**: Defines a packet sent from either a server or a client to the other. A client will send to a server, and a server will send to a client.
+- **Exchange**: Defines a packet sent from a server to a client, or from a client to a server.
 
 ## Overview
 
@@ -105,12 +107,11 @@ The server is responsible to identifying incoming connections, broadcasting mess
 
 ## Headers
 
-This section will go over the headers that can be shared between multiple packets. Each header defines a packet format, a description for each of their fields and examples if appropriated.
+This section will go over the headers that can be used in different packets. Each header defines a packet format, a description for each of their fields and examples if appropriated.
 
 ### `PACKET_TYPE`
 
-This section defines the shared common header between all packets. All packets **MUST** start with the header. Each
-packet is subjected to the rules of this header.
+Header that defines the type of the packet. All packets **MUST** start with the header.
 
 #### Format
 
@@ -127,11 +128,32 @@ packet is subjected to the rules of this header.
 | ---- | ---------------- | --------------------------------------------------- |
 | Type | 8 bits, unsigned | Magic number used to define the type of the packet. |
 
-The field `Type` **MUST NOT** be `0x0`. Any type associated with a packet type **MUST** be supported. An unsupported type **MUST** be ignored.
+The field `Type` **MUST NOT** be `0x0`. Any value defined by a packet type **MUST** be supported. An unsupported type **MUST** be ignored.
+
+### `USER_AUTHENTICATION`
+
+Header that allows to identify a packet for a given user.
+
+#### Format
+
+```
+ 0               5
++-----------------+
+| User Identifier |
++-----------------+
+```
+
+#### Fields
+
+| Name            | Size             | Description                           |
+| --------------- | ---------------- | ------------------------------------- |
+| User Identifier | 6 bits, unsigned | Unique identifier for the local user. |
+
+The field `User Identifier` **MUST** be unique across all connected users.
 
 ### `MISSING_MESSAGES`
 
-This section defines a shared header that allows to notify of missing messages.
+Header that allows to notify of missing messages.
 
 #### Format
 ```
@@ -143,10 +165,10 @@ This section defines a shared header that allows to notify of missing messages.
 
 #### Fields
 
-| Name                    | Size              | Description                                                                     |
-| ----------------------- | ----------------- | ------------------------------------------------------------------------------- |
+| Name                    | Size              | Description                                                                   |
+| ----------------------- | ----------------- | ----------------------------------------------------------------------------- |
 | Last Message Identifier | 8 bits, unsigned  | Identifier of the last received message. **MAY** be reused in other messages. |
-| Received Messages       | 64 bits, unsigned | Flags defining if a previous message was received.                              |
+| Received Messages       | 64 bits, unsigned | Flags defining if a previous message was received.                            |
 
 The field `Received Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Received Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Received Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
 
@@ -189,58 +211,58 @@ Request to establish a connection.
 #### Format
 
 ```
- 0      7 8     11
-+--------+--------+
-|  Type  | Length |
-+--------+--------+
+ 0      7 8                11 12    15
++--------+-------------------+--------+
+|  Type  | Client Identifier | Length |
++--------+-------------------+--------+
 
- 12     139  140  143
-+----------+--------+
-| Username | Unused |
-+----------+--------+
+ 16     143
++----------+
+| Username |
++----------+
 ```
 
 #### Fields
 
-| Name     | Size               | Description                                                            |
-| -------- | ------------------ | ---------------------------------------------------------------------- |
-| Type     | 8 bits, unsigned   | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x01`. |
-| Length   | 4 bits, unsigned   | Length of the username in bytes. **MUST** be offset by 1.              |
-| Username | 128 bits, unsigned | Characters of the username. **MUST** be ASCII characters.              |
-| Unused   | 4 bits             | Unused bits                                                            |
+| Name              | Size               | Description                                                    |
+| ----------------- | ------------------ | -------------------------------------------------------------- |
+| Type              | 8 bits, unsigned   | Field defined in the header `PACKET_TYPE`. **MUST** be `0x01`. |
+| Client Identifier | 4 bits, unsigned   | Client identifier for the local client instance.               |
+| Length            | 4 bits, unsigned   | Length of the username in bytes. **MUST** be offset by 1.      |
+| Username          | 128 bits, unsigned | Characters of the username. **MUST** be ASCII characters.      |
+
+The field `Client Identifier` **MUST** be randomly generated.
 
 The field `Length` is offset by one (1). For a username of one (1) character, the length **MUST** be `0x0`. For a username of 16 characters, the length **MUST** be `0xF`. This allows the
 username to be a maximum of 16 characters, while still fitting inside a nybble.
 
 The field `Username` **MUST** be of length defined by the field `Length`. The protocol **MUST NOT** assume that the field takes the full possible length. For a username of three (3) characters, the total size of the field `Username` will be `24` bits. Usernames with no character or a length of zero (0) or less **MUST NOT** be allowed.
 
-Each character of the field `Username` **MUST** is one (1) byte in length. Since the field `Username` begins at a four (4) bits offset, each character **MUST** span across two (2) adjacent packet bytes. The upper nybble of the character **MUST** be written on the lower nybble of the first byte. The lower nybble of the character **MUST** be written on the upper nybble of the second byte.
-
-The last nybble of the packet is unused. The protocol has no behavior logic defined for that data. The client **MAY** choose to set it, but **MUST NOT** assume that the server will read it. The server **SHOULD** ignore it.
+Each character of the field `Username` **MUST** is one (1) byte in length.
 
 #### Examples
 
 Example of a packet:
 
 ```
-01                 Type
-55                 Length + Upper nybble of Username
-06 c6 17 96 57     Username
-20                 Lower nybble of Username + Unused
+01					Type
+C5					Client Identifier + Length
+50 6C 51 79 65 72	Username
 ```
 
 Example of how the username `Player` is found:
 
 ```
-Bytes: 01 55 06 c6 17 96 57 20
-Nybbles: 0 1 5 5 0 6 c 6 1 7 9 6 5 7 2 0
+Bytes: 01 C5 50 6C 51 79 65 72
+Nybbles: 0 1 C 5 5 0 6 C 5 1 7 9 6 5 7 2
 Grouped Nybbles:
 	- Type: 0 1
+	- Client Identifier: C
 	- Length: 5
 	- Username: 5 0 6 c 6 1 7 9 6 5 7 2
-	- Unused: 0
 
 Type: 1
+Client Identifier: 12
 Length: 5
 Username:
 	5 0 6 c 6 1 7 9 6 5 7 2
@@ -256,17 +278,18 @@ Response to accept the connection request.
 #### Format
 
 ```
- 0      7 
-+--------+
-|  Type  |
-+--------+
+ 0      7 8              13
++--------+-----------------+
+|  Type  | User Identifier |
++--------+-----------------+
 ```
 
 #### Fields
 
-| Name | Size             | Description                                                            |
-| ---- | ---------------- | ---------------------------------------------------------------------- |
-| Type | 8 bits, unsigned | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x02`. |
+| Name            | Size             | Description                                                    |
+| --------------- | ---------------- | -------------------------------------------------------------- |
+| Type            | 8 bits, unsigned | Field defined in the header `PACKET_TYPE`. **MUST** be `0x02`. |
+| User Identifier | 6 bits, unsigned | Field defined in the header `USER_AUTHENTICATION`.             |
 
 ### `CONNECTION_REJECTED`
 
@@ -283,9 +306,9 @@ Response to reject the connection request.
 
 #### Fields
 
-| Name | Size             | Description                                                            |
-| ---- | ---------------- | ---------------------------------------------------------------------- |
-| Type | 8 bits, unsigned | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x03`. |
+| Name | Size             | Description                                                    |
+| ---- | ---------------- | -------------------------------------------------------------- |
+| Type | 8 bits, unsigned | Field defined in the header `PACKET_TYPE`. **MUST** be `0x03`. |
 
 ### `CONNECTION_CLOSED`
 
@@ -294,19 +317,25 @@ Exchange to notify that the connection is closed.
 #### Format
 
 ```
- 0      7 
-+--------+
-|  Type  |
-+--------+
+ 0      7 8              13
++--------+-----------------+
+|  Type  | User Identifier |
++--------+-----------------+
 ```
 
 #### Fields
 
-| Name | Size             | Description                                                            |
-| ---- | ---------------- | ---------------------------------------------------------------------- |
-| Type | 8 bits, unsigned | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x04`. |
+| Name            | Size             | Description                                                    |
+| --------------- | ---------------- | -------------------------------------------------------------- |
+| Type            | 8 bits, unsigned | Field defined in the header `PACKET_TYPE`. **MUST** be `0x02`. |
+| User Identifier | 6 bits, unsigned | Field defined in the header `USER_AUTHENTICATION`.             |
+
+The field `User Identifier` **MUST** be ignored when this packet is received from the server.
 
 ### `MESSAGE_BROADCAST`
+
+> [!IMPORTANT]
+> Redesign
 
 Exchange to broadcast a message.
 
@@ -326,15 +355,15 @@ Exchange to broadcast a message.
 
 #### Fields
 
-| Name                    | Size                | Description                                                            |
-| ----------------------- | ------------------- | ---------------------------------------------------------------------- |
-| Type                    | 8 bits, unsigned    | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x10`. |
-| User Identifier         | 6 bits, unsigned    | Unique identifier for the local user.                                  |
-| Last Message Identifier | 8 bits, unsigned    | Field shared with the common header `MISSING_MESSAGES`.                |
-| Received Messages       | 64 bits, unsigned   | Field shared with the common header `MISSING_MESSAGES`.                |
-| Message Identifier      | 8 bits, unsigned    | Identifier of the message. **MAY** be reused in other messages.      |
-| Message Length          | 10 bits, unsigned   | Length of the message in bytes.                                        |
-| Message                 | 8000 bits, unsigned | Characters of the message. **MUST** be ASCII characters.               |
+| Name                    | Size                | Description                                                     |
+| ----------------------- | ------------------- | --------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned    | Field defined in the header `PACKET_TYPE`. **MUST** be `0x10`.  |
+| User Identifier         | 6 bits, unsigned    | Field defined in the header `USER_AUTHENTICATION`.              |
+| Last Message Identifier | 8 bits, unsigned    | Field defined in the header `MISSING_MESSAGES`.                 |
+| Received Messages       | 64 bits, unsigned   | Field defined in the header `MISSING_MESSAGES`.                 |
+| Message Identifier      | 8 bits, unsigned    | Identifier of the message. **MAY** be reused in other messages. |
+| Message Length          | 10 bits, unsigned   | Length of the message in bytes.                                 |
+| Message                 | 8000 bits, unsigned | Characters of the message. **MUST** be ASCII characters.        |
 
 The field `Message Length` **MUST NOT** be more than `1000`. The field `Message Length` **MUST NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
 
@@ -388,21 +417,22 @@ Exchange to request a message.
 #### Format
 
 ```
- 0      7 8                      15 16               79
-+--------+-------------------------+-------------------+
-|  Type  | Last Message Identifier | Received Messages |
-+--------+-------------------------+-------------------+
+ 0      7 8              13 14                     21 22               85
++--------+-----------------+-------------------------+-------------------+
+|  Type  | User Identifier | Last Message Identifier | Received Messages |
++--------+-----------------+-------------------------+-------------------+
 ```
 
 #### Fields
 
-| Name                    | Size              | Description                                                            |
-| ----------------------- | ----------------- | ---------------------------------------------------------------------- |
-| Type                    | 8 bits, unsigned  | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x11`. |
-| Last Message Identifier | 8 bits, unsigned  | Field shared with the common header `MISSING_MESSAGES`.                |
-| Received Messages       | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`.                |
+| Name                    | Size              | Description                                                    |
+| ----------------------- | ----------------- | -------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned  | Field defined in the header `PACKET_TYPE`. **MUST** be `0x11`. |
+| User Identifier         | 6 bits, unsigned  | Field defined in the header `USER_AUTHENTICATION`.             |
+| Last Message Identifier | 8 bits, unsigned  | Field defined in the header `MISSING_MESSAGES`.                |
+| Received Messages       | 64 bits, unsigned | Field defined in the header `MISSING_MESSAGES`.                |
 
-The field `Received Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Received Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Received Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
+The field `User Identifier` **MUST** be ignored when this packet is received from the server.
 
 ### `HEARTBEAT_BROADCAST`
 
@@ -411,19 +441,20 @@ Request to notify of the health status of the client.
 #### Format
 
 ```
- 0      7 8                      15 16               79
-+--------+-------------------------+-------------------+
-|  Type  | Last Message Identifier | Received Messages |
-+--------+-------------------------+-------------------+
+ 0      7 8              13 14                     21 22               85
++--------+-----------------+-------------------------+-------------------+
+|  Type  | User Identifier | Last Message Identifier | Received Messages |
++--------+-----------------+-------------------------+-------------------+
 ```
 
 #### Fields
 
-| Name                    | Size              | Description                                                            |
-| ----------------------- | ----------------- | ---------------------------------------------------------------------- |
-| Type                    | 8 bits, unsigned  | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x20`. |
-| Last Message Identifier | 8 bits, unsigned  | Field shared with the common header `MISSING_MESSAGES`.                |
-| Received Messages       | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`.                |
+| Name                    | Size              | Description                                                    |
+| ----------------------- | ----------------- | -------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned  | Field defined in the header `PACKET_TYPE`. **MUST** be `0x11`. |
+| User Identifier         | 6 bits, unsigned  | Field defined in the header `USER_AUTHENTICATION`.             |
+| Last Message Identifier | 8 bits, unsigned  | Field defined in the header `MISSING_MESSAGES`.                |
+| Received Messages       | 64 bits, unsigned | Field defined in the header `MISSING_MESSAGES`.                |
 
 ### `HEARTBEAT_RECEIVED`
 
@@ -440,11 +471,11 @@ Response to notify that the health status was received.
 
 #### Fields
 
-| Name                    | Size              | Description                                                            |
-| ----------------------- | ----------------- | ---------------------------------------------------------------------- |
-| Type                    | 8 bits, unsigned  | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x21`. |
-| Last Message Identifier | 8 bits, unsigned  | Field shared with the common header `MISSING_MESSAGES`.                |
-| Received Messages       | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`.                |
+| Name                    | Size              | Description                                                    |
+| ----------------------- | ----------------- | -------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned  | Field defined in the header `PACKET_TYPE`. **MUST** be `0x21`. |
+| Last Message Identifier | 8 bits, unsigned  | Field defined in the header `MISSING_MESSAGES`.                |
+| Received Messages       | 64 bits, unsigned | Field defined in the header `MISSING_MESSAGES`.                |
 
 ### `HEARTBEAT_REQUEST`
 
@@ -461,11 +492,11 @@ Push to request a health status notification.
 
 #### Fields
 
-| Name                    | Size              | Description                                                            |
-| ----------------------- | ----------------- | ---------------------------------------------------------------------- |
-| Type                    | 8 bits, unsigned  | Field shared with the common header `PACKET_TYPE`. **MUST** be `0x22`. |
-| Last Message Identifier | 8 bits, unsigned  | Field shared with the common header `MISSING_MESSAGES`.                |
-| Received Messages       | 64 bits, unsigned | Field shared with the common header `MISSING_MESSAGES`.                |
+| Name                    | Size              | Description                                                    |
+| ----------------------- | ----------------- | -------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned  | Field defined in the header `PACKET_TYPE`. **MUST** be `0x22`. |
+| Last Message Identifier | 8 bits, unsigned  | Field defined in the header `MISSING_MESSAGES`.                |
+| Received Messages       | 64 bits, unsigned | Field defined in the header `MISSING_MESSAGES`.                |
 
 ## State Machines
 
@@ -540,7 +571,7 @@ stateDiagram-v2
 | ------------- | ----------- | ------------------------------ | ------------------------- | ---------- |
 | Offline       | User Action | User requested connection      | Send `CONNECTION_REQUEST` | Wait       |
 | Wait          | Packet      | Received `CONNECTION_REJECTED` | Notify user of rejection  | Offline    |
-| Wait          | Packet      | Received ̀`CONNECTION_ACCEPTED` | None                      | Online     |
+| Wait          | Packet      | Received `CONNECTION_ACCEPTED` | Notify user of success    | Online     |
 | Wait          | Timer       | 1 second timer expired         | Send `CONNECTION_REQUEST` | Wait       |
 | Wait          | Timer       | 10 seconds timer expired       | Notify user of failure    | Offline    |
 
