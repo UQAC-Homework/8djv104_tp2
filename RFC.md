@@ -806,15 +806,31 @@ The client **MUST** initialize its `Last Message Identifier` to `0xFF` and its `
 
 When the client sends a `MESSAGE_SUBMIT` packet, the client **MUST** associate the `Message` with the current value of its counter, and then increase this counter by one (1).
 
-When the server receives a `MESSAGE_SUBMIT` packet, the server **MUST** extract the `Message Identifier` and `Received Messages` from the packet. The server **MUST** calculate the distance between the `Message Identifier` and the session's `Last Message Identifier`, using the following formula: `(Message Identifier - Last Message Identifier) % 256`.
+When the server receives a `MESSAGE_SUBMIT` packet, the server **MUST** extract the `Message Identifier` from the packet. The server **MUST** calculate the distance between the `Message Identifier` and the session's `Last Message Identifier`, using the following formula: `(Message Identifier - Last Message Identifier) % 256`.
 
-If the server calculates that the distance is between `1` and `127`, the server **MUST** set the session's `Last Message Identifier` to the `Message Identifier` of the packet. The server **MUST** update the session's `Received Messages` so that it describes the messages preceding the new `Last Message Identifier`, as defined by the header `MISSING_MESSAGES`. The previous `Last Message Identifier` **MUST** be marked as received, and the messages between the previous and the new `Last Message Identifier` **MUST** be marked as missing. The server **MUST** send a `MESSAGE_BROADCAST` packet to all clients. If the distance is greater than `1`, the server **MUST** send a `MESSAGE_REQUEST` packet to the client for the missing messages.
+If the server calculates that the distance is between `1` and `127`, the message is considered to be new. The server **MUST** set the session's `Last Message Identifier` to the `Message Identifier` of the packet. The server **MUST** update the session's `Received Messages` so that it describes the messages preceding the new `Last Message Identifier`. The previous `Last Message Identifier` **MUST** be marked as received, and the messages between the previous and the new `Last Message Identifier` **MUST** be marked as missing. If the distance is greater than `1`, the server **MUST** send a `MESSAGE_REQUEST` packet to the client, containing the session's updated `Last Message Identifier` and `Received Messages`.
 
 Otherwise, the server **MUST** calculate the distance in the other direction, using the following formula: `(Last Message Identifier - Message Identifier) % 256`.
 
-If this distance is `0`, the server **MUST** ignore the packet. If this distance is between `1` and `64`, the server **MUST** check whether the message is marked as received in the session's `Received Messages`. If it is, the packet **MUST** be ignored. If it is not, the server **MUST** mark the message as received and send a `MESSAGE_BROADCAST` packet to all clients. If this distance is greater than `64`, the packet **MUST** be ignored.
+If this distance is `0`, the server **MUST** ignore the message. If this distance is between `1` and `64`, the server **MUST** check whether the message is marked as received in the session's `Received Messages`. If it is, the message **MUST** be ignored. If it is not, the message is considered late. The server **MUST** mark the message as received. If this distance is greater than `64`, the message **MUST** be ignored.
+
+The client **MUST** identify a message received in a `MESSAGE_BROADCAST` packet in the same way, using the `Message Identifier` of the packet and its own `Last Message Identifier` and `Received Messages`. If the client considers the message to be new and the distance is greater than `1`, the client **MUST** send a `MESSAGE_REQUEST` packet to the server, containing its updated `Last Message Identifier` and `Received Messages`.
 
 ### Message Broadcast
+
+When the server receives a `MESSAGE_SUBMIT` packet, the server **MUST** find the session using the field `User Identifier`. If no session is found, the packet **MUST** be handled as defined in the section `Unknown Packet Sources`.
+
+The server **MUST** process the `Last Message Identifier` and `Received Messages` of the packet, as defined in the section `Message Retransmission`.
+
+The server **MUST** identify the message. If the message is new or late, the server **MUST** broadcast it. Otherwise, the server **MUST** ignore it.
+
+To broadcast a message, the server **MUST** do the following for each opened session, including the session of the sender. The server **MUST** associate the message with the server-side message counter of the session, and then increase this counter by one (1). The server **MUST** store the message in the history of the session. The server **MUST** send a `MESSAGE_BROADCAST` packet, containing the server-side `Message Identifier`, the `Username` of the sender, the `Message` and the current `Last Message Identifier` and `Received Messages` of the session.
+
+When the client receives a `MESSAGE_BROADCAST` packet, the client **MUST** process the `Last Message Identifier` and `Received Messages` of the packet, as defined in the section `Message Retransmission`.
+
+If the client identifies the message as new or late, the client **SHOULD** display the message to the user immediately. The client **SHOULD NOT** wait for missing messages before displaying a message. The messages are displayed in the order in which they arrive.
+
+The client **SHOULD NOT** display its own message when the user submits it. The message is displayed when it is received in a `MESSAGE_BROADCAST` packet.
 
 When the server receives a `MESSAGE_SUBMIT` packet, the server **MUST** increment its global server-side broadcast counter. The server **MUST** send a `MESSAGE_BROADCAST` packet to all clients, containing the server-side `Message Identifier`, the `Username` of the sender and the `Message`.
 
@@ -827,6 +843,8 @@ If the client's broadcast counter is ahead of the given `Message Identifier`, th
 If the client's broadcast counter is behind the given `Message Identifier`, the client **MUST** send `MESSAGE_REQUEST` for `Message Identifier` separating the given `Message Identifier` and the current broadcast counter.
 
 ### Message Retransmission
+
+
 
 ## Constants
 
