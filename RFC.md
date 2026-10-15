@@ -501,7 +501,7 @@ Push to broadcast a message.
 
 | Name               | Size                | Description                                                     |
 | ------------------ | ------------------- | --------------------------------------------------------------- |
-| Type               | 8 bits, unsigned    | Field defined in the header `PACKET_TYPE`. **MUST** be `0x10`.  |
+| Type               | 8 bits, unsigned    | Field defined in the header `PACKET_TYPE`. **MUST** be `0x11`.  |
 | Message Identifier | 8 bits, unsigned    | Identifier of the message. **MAY** be reused in other messages. |
 | Username Length    | 4 bits, unsigned    | Field defined in the header `USERNAME_CONTENT`.                 |
 | Username           | 128 bits, unsigned  | Field defined in the header `USERNAME_CONTENT`.                 |
@@ -530,7 +530,7 @@ Exchange to request a message.
 
 | Name                    | Size              | Description                                                    |
 | ----------------------- | ----------------- | -------------------------------------------------------------- |
-| Type                    | 8 bits, unsigned  | Field defined in the header `PACKET_TYPE`. **MUST** be `0x11`. |
+| Type                    | 8 bits, unsigned  | Field defined in the header `PACKET_TYPE`. **MUST** be `0x12`. |
 | User Identifier         | 6 bits, unsigned  | Field defined in the header `USER_AUTHENTICATION`.             |
 | Last Message Identifier | 8 bits, unsigned  | Field defined in the header `MISSING_MESSAGES`.                |
 | Received Messages       | 64 bits, unsigned | Field defined in the header `MISSING_MESSAGES`.                |
@@ -800,10 +800,23 @@ When the timer for `CLIENT_INACTIVITY_TIMEOUT` expires, the server **MUST** send
 
 ### Message Identification
 
+When the user submits a message, the client **MUST** associate the message with the current value of its local client-side message counter. The client **MUST** then increase this counter by one (1). The client **MUST** send a `MESSAGE_SUBMIT` packet, containing the client-side `Message Identifier` and the user-defined `Message`.
+
+When the server receives a `MESSAGE_SUBMIT` packet, the server **MUST** extract the `User Identifier`, the client-side `Message Identifier` and the `Message` from the packet. The server **MUST** associate the message with the current value of its local server-side message counter. The server **MUST** associate the server-side `Message Identifier` to the `User Identifier`, and associate the server-side `Message Identifier` to the client-side `Message Identifier`.
+
 ### Message Broadcast
 
-### Message Retransmission
+When the server receives a `MESSAGE_SUBMIT` packet, the server **MUST** increment its global server-side broadcast counter. The server **MUST** send a `MESSAGE_BROADCAST` packet to all clients, containing the server-side `Message Identifier`, the `Username` of the sender and the `Message`.
 
+When the client receives a `MESSAGE_BROADCAST` packet, the client **MUST** extract the server-side `Message Identifier`, the `Username` and the `Message`.
+
+If the client's broadcast counter matches the given `Message Identifier`, the client **MUST** process the message and increment its broadcast counter.
+
+If the client's broadcast counter is ahead of the given `Message Identifier`, the client **MUST** try to process the message. If the message was already processed, the client **MUST** ignore the packet.
+
+If the client's broadcast counter is behind the given `Message Identifier`, the client **MUST** send `MESSAGE_REQUEST` for `Message Identifier` separating the given `Message Identifier` and the current broadcast counter.
+
+### Message Retransmission
 
 ## Constants
 
