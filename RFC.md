@@ -837,6 +837,165 @@ When the server receives a `CONNECTION_REQUEST` from a unknown source, the serve
 
 When another type of packet is received from a unknown source, the packet **MUST** be discarded. The packet type **MAY** be defined, but **MUST NOT** be handled within the context of the current state.
 
-## Exemples d’échanges
+## Examples of Exchanges
 
-au moins trois diagrammes de séquence, dont un avec perte de paquets.
+This section will show example of communications between a client and a server.
+
+The name `last` is used instead of `Last Message Identifier`. The field `Received Messages` is only mentioned when it matters. Fields that do not matter for the example are omitted.
+
+### Connection, message and termination
+
+Bob is already connected. Alice connects, sends a message that is broadcast to both clients, and then disconnects. Each session has its own broadcast counter, so the broadcast has the identifier `0` for both. The broadcast to Alice has `last=0`, because the server received her message `0`. The broadcast to Bob has `last=0xFF`, because the server has not received any message from Bob.
+
+```mermaid
+sequenceDiagram
+	actor Alice
+    participant Server@{ "type" : "database" }
+    actor Bob
+
+	Alice->>+Server: CONNECTION_REQUEST
+	Note over Alice,Server: client_id=0x3, name="Alice"
+	Note right of Server: session created
+
+	Server->>-Alice: CONNECTION_ACCEPTED
+	Note over Alice,Server: user_id=1
+
+	Alice->>Server: MESSAGE_SUBMIT
+	Note over Alice,Server: message_id=0, last=0xFF,<br>text="Hello World!"
+	Note right of Server: new message
+
+	Server->>Bob: MESSAGE_BROADCAST
+	Note over Server,Bob: message_id=0, name="Alice", last=0xFF,<br>text="Hello World!"
+
+	Server->>Alice: MESSAGE_BROADCAST
+	Note over Server,Alice: message_id=0, name="Alice", last=0,<br>text="Hello World!"
+
+	Alice->>Server: CONNECTION_CLOSED
+	Note over Alice,Server: user_id=1
+	Note right of Server: session removed
+```
+
+### Connection with a lost `CONNECTION_ACCEPTED`
+
+The server creates the session when it receives the first `CONNECTION_REQUEST`. The `CONNECTION_ACCEPTED` is lost, so the client sends the `CONNECTION_REQUEST` again after `SERVER_CONNECTION_INTERVAL`. The server finds the session using the network address and the `Client Identifier`. It does not create a second session, and answers with the same `User Identifier`.
+
+```mermaid
+sequenceDiagram
+	actor Client
+    participant Server@{ "type" : "database" }
+
+	Client->>Server: CONNECTION_REQUEST
+	Note over Client,Server: client_id=0x3
+	Note right of Server: session created (user_id=5)
+
+	Server-xClient: CONNECTION_ACCEPTED
+
+	Note over Client,Server: [SERVER_CONNECTION_INTERVAL expires]
+
+	Client->>Server: CONNECTION_REQUEST
+	Note over Client,Server: client_id=0x3
+	Note right of Server: session found, no new session
+
+	Server->>Client: CONNECTION_ACCEPTED
+	Note over Server,Client: user_id=5
+
+	Note left of Client: Client is now online
+```
+
+### Lost message detected by a hole
+
+The server sends the messages `4`, `5` and `6` to Alice. The message `5` is lost. When Alice receives the message `6`, its distance to her `Last Message Identifier` is two (2), so she detects that the message `5` is missing and sends a `MESSAGE_REQUEST`. The bit `0` is `0b0`, which is the message `5`. The server retransmits it with its original identifier. Alice considers it late and displays it. The messages `4` and `6` were displayed as soon as they arrived.
+
+```mermaid
+sequenceDiagram
+    participant Server@{ "type" : "database" }
+	actor Alice
+
+	Server->>Alice: MESSAGE_BROADCAST
+	Note over Server,Alice: message_id=4
+
+	Note right of Alice: displayed
+
+	Server-xAlice: MESSAGE_BROADCAST
+	Note over Server,Alice: message_id=5
+
+	Server->>Alice: MESSAGE_BROADCAST
+	Note over Server,Alice: message_id=6
+
+	Note right of Alice: displayed
+	Note right of Alice: hole at 5
+
+	Alice->>Server: MESSAGE_REQUEST
+	Note over Alice,Server: last=6, bit 0 = 0
+
+	Server->>Alice: MESSAGE_BROADCAST
+	Note over Server,Alice: message_id=5
+	Note right of Server: retransmission
+
+	Note right of Alice: late, displayed
+```
+
+### Lost last message recovered by a heartbeat
+
+The client sends the message `7` and it is lost. No later message reveals the loss, because the client has nothing else to send. When `INACTIVITY_WARNING` expires, the client sends a `HEARTBEAT_BROADCAST`. The server answers with a `HEARTBEAT_RECEIVED` containing `last=6`. The client already sent the message `7`, which is newer than `6`, so it considers it missing and retransmits it.
+
+```mermaid
+sequenceDiagram
+	actor Client
+    participant Server@{ "type" : "database" }
+
+	Client-xServer: MESSAGE_SUBMIT
+	Note over Client,Server: message_id=7
+
+	Note over Client,Server: [INACTIVITY_WARNING expires]
+
+	Client->>Server: HEARTBEAT_BROADCAST
+
+	Server->>Client: HEARTBEAT_RECEIVED
+	Note over Client,Server: last=6
+
+	Note left of Client: 7 is newer than 6
+	Note left of Client: 7 was sent, so it is missing
+
+	Client->>Server: MESSAGE_SUBMIT
+	Note over Client,Server: message_id=7
+	Note right of Client: retransmission
+	Note right of Server: new
+
+	Server->>Client: MESSAGE_BROADCAST
+	Note over Client,Server: message_id=3
+
+	Note left of Client: displayed
+```
+
+### Inactive client, then disconnected client
+
+While the client has nothing to send, it sends a `HEARTBEAT_BROADCAST` every time `INACTIVITY_WARNING` expires, and the server answers with a `HEARTBEAT_RECEIVED`. Then the client is killed. After `CLIENT_INACTIVITY_WARNING`, the session becomes `Suspicious` and the server sends a `HEARTBEAT_REQUEST` every `HEARTBEAT_REQUEST_INTERVAL`. After `CLIENT_INACTIVITY_TIMEOUT`, the server sends a `CONNECTION_CLOSED` and removes the session.
+
+```mermaid
+sequenceDiagram
+	actor Client
+    participant Server@{ "type" : "database" }
+
+	loop Idle
+		Note over Client,Server: [nothing sent for INACTIVITY_WARNING]
+
+		Client->>Server: HEARTBEAT_BROADCAST
+		Server->>Client: HEARTBEAT_RECEIVED
+	end
+
+	Note left of Client: Killed (kill -9)
+
+	Note over Client,Server: [nothing received for<br>CLIENT_INACTIVITY_WARNING]
+	Note right of Server: Session to Suspicious
+
+	loop Request Heartbeat
+		Server->>Client: HEARTBEAT_REQUEST
+		Note over Client,Server: [wait HEARTBEAT_REQUEST_INTERVAL]
+	end
+
+	Note over Client,Server: [timeout CLIENT_INACTIVITY_TIMEOUT]
+
+	Server->>Client: CONNECTION_CLOSED
+	Note right of Server: Session removed
+```
