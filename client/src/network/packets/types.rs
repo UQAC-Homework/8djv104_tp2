@@ -1,0 +1,10 @@
+pub const CONNECTION_REQUEST: u8 = 0x01;
+pub const CONNECTION_ACCEPTED: u8 = 0x02;
+pub const CONNECTION_REJECTED: u8 = 0x03;
+pub const CONNECTION_CLOSED: u8 = 0x04;
+pub const MESSAGE_SUBMIT: u8 = 0x10;
+pub const MESSAGE_BROADCAST: u8 = 0x11;
+pub const MESSAGE_REQUEST: u8 = 0x12;
+pub const HEARTBEAT_BROADCAST: u8 = 0x20;
+pub const HEARTBEAT_RECEIVED: u8 = 0x21;
+pub const HEARTBEAT_REQUEST: u8 = 0x22;
