@@ -1,5 +1,6 @@
 mod network;
 mod time;
+mod application;
 
 use std::net::UdpSocket;
 
