@@ -546,7 +546,7 @@ stateDiagram-v2
 | Suspicious    | Timer    | `HEARTBEAT_REQUEST_INTERVAL` timer expired | Send `HEARTBEAT_REQUEST`                    | Suspicious |
 | Suspicious    | Packet   | Received `HEARTBEAT_BROADCAST`             | Send `HEARTBEAT_RECEIVED`                   | Alive      |
 | Suspicious    | Packet   | Received any valid packet                  | Pass received package to next state         | Alive      |
-| Suspicious    | Timer    | `CLIENT_INACTIVITY_TIMEOUT` timer expired  | Unregister client                           | Dead       |
+| Suspicious    | Timer    | `CLIENT_INACTIVITY_TIMEOUT` timer expired  | Send `CONNECTION_CLOSED`, Unregister client | Dead       |
 | Suspicious    | Packet   | Received `CONNECTION_CLOSED`               | Unregister client                           | Dead       |
 | Dead          | Internal | Action Executed                            | Clean client resources                      | Terminated |
 
@@ -652,7 +652,7 @@ When the client is initialized, the client **MUST** generate a `Client Identifie
 
 When the user attempts to connect, the client **MUST** send a `CONNECTION_REQUEST` packet, containing its `Client Identifier` and the user-provided username.
 
-When the server receives the `CONNECTION_REQUEST` packet, the server **MUST** extract the client's network address and the field `Client Identifier` from the packet. Using these, the server **MUST** check if a session has been created for them.
+When the server receives a `CONNECTION_REQUEST` packet, the server **MUST** extract the client's network address and the field `Client Identifier` from the packet. Using these, the server **MUST** check if a session has been created for them.
 
 If a session is found, the server **MUST** respond with a `CONNECTION_ACCEPTED` packet, containing the `User Identifier` of the session.
 
@@ -668,17 +668,43 @@ If the server does not receive any valid packet from the client after the sendin
 
 ### Termination
 
-If the user requests a termination of the client, the client **MUST** send a `CONNECTION_CLOSED` packet, containing the `User Identifier` of the client. The client **SHOULD** initiate the tear down of local network resources.
+If the user requests a termination of the client, the client **MUST** send a `CONNECTION_CLOSED` packet, containing the `User Identifier` of the client. The client **SHOULD** initiate the teardown of local network resources.
 
 If the user requests a termination of the server, the server **SHOULD** send a `CONNECTION_CLOSED` packet to all the opened sessions, containing the value `0b000000` as the field `User Identifier`.
 
-When the client receives the `CONNECTION_CLOSED` packet, the client **MUST** extract the field `User Identifier` from the packet. If the field `User Identifier` is not `0b000000`, the client **MUST** ignore the packet. If the field `User Identifier` is `0b000000`, the client **MUST** disconnect its socket. The client **SHOULD** initiate the tear down of local network resources.
+When the client receives a `CONNECTION_CLOSED` packet, the client **MUST** extract the field `User Identifier` from the packet. If the field `User Identifier` is not `0b000000`, the client **MUST** ignore the packet. If the field `User Identifier` is `0b000000`, the client **MUST** disconnect its socket. The client **SHOULD** initiate the teardown of local network resources.
 
-When the server receives the `CONNECTION_CLOSED` packet, the server **MUST** extract the field `User Identifier` from the packet. If the field `User Identifier` is `0b000000`, the server **MUST** ignore the packet. If the field `User Identifier` is not `0b000000`, the server **MUST** mark the session as dead.
+When the server receives a `CONNECTION_CLOSED` packet, the server **MUST** extract the field `User Identifier` from the packet. If the field `User Identifier` is `0b000000`, the server **MUST** ignore the packet. If the field `User Identifier` is not `0b000000`, the server **MUST** mark the session as dead.
 
 When the session dies, the server **MUST** dissociate the client's network address from the `User Identifier`, if no packet was received after the session's creation. The server **MUST** dissociate the `User Identifier` from the session. The server **MUST** release the `User Identifier` and destroy the session.
 
 ### Heartbeat
+
+#### Client
+
+When the client receives a `CONNECTION_ACCEPTED` packet, the client **MUST** start a timer for `INACTIVITY_WARNING`. The client **MUST** reset the timer for `INACTIVITY_WARNING` when the client sends a packet, as long as the timer is not expired.
+
+When the timer for `INACTIVITY_WARNING` expires, the client **MUST** send a `HEARTBEAT_BROADCAST` packet, and start a timer for `HEARTBEAT_INTERVAL` and for `SERVER_INACTIVITY_TIMEOUT`.
+
+When the timer for `HEARTBEAT_INTERVAL` expires, the client **MUST** send a `HEARTBEAT_BROADCAST` packet. The client **MUST** reset the timer for `HEARTBEAT_INTERVAL`.
+
+If the client receives a `HEARTBEAT_RECEIVED` packet, the client **MUST** reset the timers for `HEARTBEAT_INTERVAL` and `SERVER_INACTIVITY_TIMEOUT`. The client **MUST** reset the timer for `INACTIVITY_WARNING`.
+
+If the client receives a `HEARTBEAT_REQUEST` packet, the client **MUST** send a `HEARTBEAT_BROADCAST` packet. The client **SHOULD** reset the timers for `HEARTBEAT_INTERVAL` and `SERVER_INACTIVITY_TIMEOUT`.
+
+When the timer for `SERVER_INACTIVITY_TIMEOUT` expires, the client **MUST** send a `CONNECTION_CLOSED` packet. The client **SHOULD** initiate the teardown of local network resources.
+
+#### Server
+
+When the server creates the session, the server **MUST** start a timer for `CLIENT_INACTIVITY_WARNING`. The server **MUST** reset the timer for `CLIENT_INACTIVITY_WARNING` when the server receives a packet, as long as the timer is not expired.
+
+When the timer for `CLIENT_INACTIVITY_WARNING` expires, the server **MUST** start a timer for `HEARTBEAT_REQUEST_INTERVAL` and for `CLIENT_INACTIVITY_TIMEOUT`.
+
+When the timer for `HEARTBEAT_REQUEST_INTERVAL` expires, the server **MUST** send a `HEARTBEAT_REQUEST`. The server **MUST** reset the timer for `HEARTBEAT_REQUEST_INTERVAL`.
+
+If the server receives a `HEARTBEAT_BROADCAST` packet or any valid packet, the server **MUST** stop the timers for `HEARTBEAT_REQUEST_INTERVAL` and `CLIENT_INACTIVITY_TIMEOUT`. The server **MUST** reset the timer for `CLIENT_INACTIVITY_WARNING`.
+
+When the timer for `CLIENT_INACTIVITY_TIMEOUT` expires, the server **MUST** send a `CONNECTION_CLOSED` packet. The server **MUST** mark the session as dead.
 
 ### Message Identification
 
