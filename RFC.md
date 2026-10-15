@@ -209,7 +209,7 @@ Header that allows to communicate a message.
 | Message Length |
 +----------------+
 
- 10   8009
+ 10   7929
 +---------+
 | Message |
 +---------+
@@ -220,11 +220,11 @@ Header that allows to communicate a message.
 | Name           | Size                | Description                                              |
 | -------------- | ------------------- | -------------------------------------------------------- |
 | Message Length | 10 bits, unsigned   | Length of the message in bytes.                          |
-| Message        | 8000 bits, unsigned | Characters of the message. **MUST** be ASCII characters. |
+| Message        | 7920 bits, unsigned | Characters of the message. **MUST** be ASCII characters. |
 
-The field `Message Length` **MUST NOT** be more than `1000`. The field `Message Length` **MUST NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
+The field `Message Length` **MUST NOT** be more than `990`. The field `Message Length` **MUST NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
 
-The field `Message` **MUST** be of length defined by the field `Message Length`. The server **MUST** discard any message that exceeds `1000` characters. The protocol **MUST NOT** assume that the field takes the full possible length. For a message of three (3) characters, the total size of the field `Message` will be `24` bits.
+The field `Message` **MUST** be of length defined by the field `Message Length`. The server **MUST** discard any message that exceeds `990` characters. The protocol **MUST NOT** assume that the field takes the full possible length. For a message of three (3) characters, the total size of the field `Message` will be `24` bits.
 
 Each character of the field `Message` **MUST** is one (1) byte in length.
 
@@ -247,7 +247,7 @@ Header that allows to notify of missing messages.
 | Last Message Identifier | 8 bits, unsigned  | Identifier of the last received message. **MAY** be reused in other messages. |
 | Received Messages       | 64 bits, unsigned | Flags defining if a previous message was received.                            |
 
-The field `Received Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The offset from the least significant bit defines the offset from the field `Last Message Identifier`. If the field `Last Message Identifier` is greater than `64`, the field `Received Messages` **MUST** stop after `64` bits.  If the field `Last Message Identifier` is less than `64`, the field `Received Messages` **MUST** stop after `n` bits, where `n` is the value of `Last Message Identifier`.
+The field `Received Messages` **MUST** be ordered starting from the least significant bit to the most significant bit. The bit `n` is `0b1` if the message with the identifier `Last Message Identifier - 1 - n` was received, and `0b0` otherwise, using modular arithmetic on `256`. A bit that refers to a message older than the first message of the stream **MUST** be `0b1`. The `Last Message Identifier` itself is always considered received and is not part of the field.
 
 #### Examples
 
@@ -415,7 +415,7 @@ Request to send a message.
 |  Type  | User Identifier | Last Message Identifier | Received Messages | Message Identifier | Message Length |
 +--------+-----------------+-------------------------+-------------------+--------------------+----------------+
 
- 104  8103
+ 104  8023
 +---------+
 | Message |
 +---------+
@@ -431,48 +431,7 @@ Request to send a message.
 | Received Messages       | 64 bits, unsigned   | Field defined in the header `MISSING_MESSAGES`.                 |
 | Message Identifier      | 8 bits, unsigned    | Identifier of the message. **MAY** be reused in other messages. |
 | Message Length          | 10 bits, unsigned   | Field defined in the header `MESSAGE_CONTENT`.                  |
-| Message                 | 8000 bits, unsigned | Field defined in the header `MESSAGE_CONTENT`.                  |
-
-#### Examples
-
-Example of a packet:
-
-```
-10				   					Type
-94									User Identifier + Upper tayste of Message Identifier
-00                					Lower 6 bits of Message Identifier + Upper tayste of Message Length
-0B				   					Lower byte of Message Length
-48 65 6C 6C 6F 20 57 6F 72 6C 64 	Message
-```
-
-Example of how the message `Hello World` is found:
-```
-Bytes: 10 94 00 0B 48 65 6C 6C 6F 20 57 6F 72 6C 64
-Taystes: 00 01 00 00 10 01 01 00 00 00 00 00 00 00 10 11 01 00 10 00 01 10 01 01 01 10 11 00 01 10 11 00 01 10 11 11 00 10 00 00 01 01 01 11 01 10 11 11 01 11 00 10 01 10 11 00 01 10 01 00
-Bits: 0 0 0 1 0 0 0 0 1 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 1 0 1 0 0 1 0 0 0 0 1 1 0 0 1 0 1 0 1 1 0 1 1 0 0 0 1 1 0 1 1 0 0 0 1 1 0 1 1 1 1 0 0 1 0 0 0 0 0 0 1 0 1 0 1 1 1 0 1 1 0 1 1 1 1 0 1 1 1 0 0 1 0 0 1 1 0 1 1 0 0 0 1 1 0 0 1 0 0
-
-Grouped Bits:
-	- Type: 0 0 0 1 0 0 0 0
-	- User Identifier: 1 0 0 1 0 1
-	- Message Identifier: 0 0 0 0 0 0 0 0
-	- Message Length: 0 0 0 0 0 0 1 0 1 1
-	- Message: 0 1 0 0 1 0 0 0 0 1 1 0 0 1 0 1 0 1 1 0 1 1 0 0 0 1 1 0 1 1 0 0 0 1 1 0 1 1 1 1 0 0 1 0 0 0 0 0 0 1 0 1 0 1 1 1 0 1 1 0 1 1 1 1 0 1 1 1 0 0 1 0 0 1 1 0 1 1 0 0 0 1 1 0 0 1 0 0
-
-Hexadecimal Grouped Bits:
-	- Type: 10
-	- User Identifier: 25
-	- Message Identifier: 00
-	- Message Length: 0B
-	- Message: 48 65 6C 6C 6F 20 57 6F 72 6C 64
-
-Type: 16
-User Identifier: 37
-Message Identifier: 0
-Message Length: 11
-Message:
-	48 65 6C 6C 6F 20    57 6F 72 6C 64
-	H  e  l  l  o  Space W  o  r  l  d
-```
+| Message                 | 7920 bits, unsigned | Field defined in the header `MESSAGE_CONTENT`.                  |
 
 ### `MESSAGE_BROADCAST`
 
@@ -481,17 +440,17 @@ Push to broadcast a message.
 #### Format
 
 ```
- 0    7 8                 15 16             19
-+------+--------------------+-----------------+
-| Type | Message Identifier | Username Length |
-+------+--------------------+-----------------+
+ 0    7 8                 15 16                     23 24               87 88             91
++------+--------------------+-------------------------+-------------------+-----------------+
+| Type | Message Identifier | Last Message Identifier | Received Messages | Username Length |
++------+--------------------+-------------------------+-------------------+-----------------+
 
- 20     147 148          157 
+ 92     219 220          229
 +----------+----------------+
 | Username | Message Length |
 +----------+----------------+
 
- 158  8157
+ 230  8149
 +---------+
 | Message |
 +---------+
@@ -499,19 +458,16 @@ Push to broadcast a message.
 
 #### Fields
 
-| Name               | Size                | Description                                                     |
-| ------------------ | ------------------- | --------------------------------------------------------------- |
-| Type               | 8 bits, unsigned    | Field defined in the header `PACKET_TYPE`. **MUST** be `0x11`.  |
-| Message Identifier | 8 bits, unsigned    | Identifier of the message. **MAY** be reused in other messages. |
-| Username Length    | 4 bits, unsigned    | Field defined in the header `USERNAME_CONTENT`.                 |
-| Username           | 128 bits, unsigned  | Field defined in the header `USERNAME_CONTENT`.                 |
-| Message Length     | 10 bits, unsigned   | Field defined in the header `MESSAGE_CONTENT`.                  |
-| Message            | 8000 bits, unsigned | Field defined in the header `MESSAGE_CONTENT`.                  |
-
-#### Examples
-
-> [!IMPORTANT]
-> Add example
+| Name                    | Size                | Description                                                     |
+| ----------------------- | ------------------- | --------------------------------------------------------------- |
+| Type                    | 8 bits, unsigned    | Field defined in the header `PACKET_TYPE`. **MUST** be `0x11`.  |
+| Message Identifier      | 8 bits, unsigned    | Identifier of the message. **MAY** be reused in other messages. |
+| Last Message Identifier | 8 bits, unsigned    | Field defined in the header `MISSING_MESSAGES`.                 |
+| Received Messages       | 64 bits, unsigned   | Field defined in the header `MISSING_MESSAGES`.                 |
+| Username Length         | 4 bits, unsigned    | Field defined in the header `USERNAME_CONTENT`.                 |
+| Username                | 128 bits, unsigned  | Field defined in the header `USERNAME_CONTENT`.                 |
+| Message Length          | 10 bits, unsigned   | Field defined in the header `MESSAGE_CONTENT`.                  |
+| Message                 | 7920 bits, unsigned | Field defined in the header `MESSAGE_CONTENT`.                  |
 
 ### `MESSAGE_REQUEST`
 
@@ -828,23 +784,25 @@ To broadcast a message, the server **MUST** do the following for each opened ses
 
 When the client receives a `MESSAGE_BROADCAST` packet, the client **MUST** process the `Last Message Identifier` and `Received Messages` of the packet, as defined in the section `Message Retransmission`.
 
-If the client identifies the message as new or late, the client **SHOULD** display the message to the user immediately. The client **SHOULD NOT** wait for missing messages before displaying a message. The messages are displayed in the order in which they arrive.
+If the client identifies the message as new or late, the client **SHOULD** display the message to the user immediately. The client **MUST NOT** display duplicated messages. The client **SHOULD NOT** wait for missing messages before displaying a message. The messages are displayed in the order in which they arrive.
 
 The client **SHOULD NOT** display its own message when the user submits it. The message is displayed when it is received in a `MESSAGE_BROADCAST` packet.
 
-When the server receives a `MESSAGE_SUBMIT` packet, the server **MUST** increment its global server-side broadcast counter. The server **MUST** send a `MESSAGE_BROADCAST` packet to all clients, containing the server-side `Message Identifier`, the `Username` of the sender and the `Message`.
-
-When the client receives a `MESSAGE_BROADCAST` packet, the client **MUST** extract the server-side `Message Identifier`, the `Username` and the `Message`.
-
-If the client's broadcast counter matches the given `Message Identifier`, the client **MUST** process the message and increment its broadcast counter.
-
-If the client's broadcast counter is ahead of the given `Message Identifier`, the client **MUST** try to process the message. If the message was already processed, the client **MUST** ignore the packet.
-
-If the client's broadcast counter is behind the given `Message Identifier`, the client **MUST** send `MESSAGE_REQUEST` for `Message Identifier` separating the given `Message Identifier` and the current broadcast counter.
-
 ### Message Retransmission
 
+The client **MUST** keep a history of the messages it sent. The server **MUST** keep, for each session, a history of the messages it sent to that session. Each history **MUST** be a fixed-size circular buffer of `64` messages. The slot of a message is calculated using the following formula: `Message Identifier % 64`. When a new message is stored, it replaces the message that is `64` identifiers behind.
 
+Each message in the history **MUST** keep the content needed to rebuild its packet. A message **MUST** be stored in the history before its first emission.
+
+The client and the server **MUST** process the `Last Message Identifier` and `Received Messages` of every valid packet that has them, including packets that are duplicates. These fields describe the messages that the other side received from the history owner. The server **MUST** also process them in the `HEARTBEAT_BROADCAST` packets. If the `Last Message Identifier` is newer than the last message that was sent, the fields **MUST** be ignored.
+
+A message **MUST** be considered missing if its bit in `Received Messages` is `0b0`, or if it is newer than the `Last Message Identifier` and was already sent.
+
+For each missing message that is still in the history, from the oldest to the newest, the sender **MUST** retransmit the message with its original `Message Identifier`. A message **MUST NOT** be retransmitted if it is not one of the last `64` messages sent. The packet **SHOULD** be rebuilt with the current `Last Message Identifier` and `Received Messages`.
+
+If the last message of a series is lost, no later message reveals it. The `Last Message Identifier` carried by the heartbeat packets solves this case. When a `MESSAGE_SUBMIT` is lost, the client stops sending, then sends a `HEARTBEAT_BROADCAST` when `INACTIVITY_WARNING` expires. The server answers with a `HEARTBEAT_RECEIVED`, which shows that the last message is newer than the `Last Message Identifier` of the server. The client then retransmits it. When a `MESSAGE_BROADCAST` is lost, the next `HEARTBEAT_BROADCAST` of the client shows it to the server in the same way.
+
+If a missing message is no longer in the history, the sender **MUST** ignore it. The message is lost permanently, and no packet is sent to notify the receiver.
 
 ## Constants
 
