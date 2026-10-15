@@ -162,7 +162,7 @@ Header that allows to identify a packet for a given user.
 | --------------- | ---------------- | ------------------------------------- |
 | User Identifier | 6 bits, unsigned | Unique identifier for the local user. |
 
-The field `User Identifier` **MUST** be unique across all connected users.
+The field `User Identifier` **MUST** be unique across all connected users. The field `User Identifier` **MUST NOT** be `0b000000`.
 
 ### `MISSING_MESSAGES`
 
@@ -343,8 +343,6 @@ Exchange to notify that the connection is closed.
 | Type            | 8 bits, unsigned | Field defined in the header `PACKET_TYPE`. **MUST** be `0x02`. |
 | User Identifier | 6 bits, unsigned | Field defined in the header `USER_AUTHENTICATION`.             |
 
-The field `User Identifier` **MUST** be ignored when this packet is sent by the server.
-
 ### `MESSAGE_BROADCAST`
 
 > [!IMPORTANT]
@@ -445,8 +443,6 @@ Exchange to request a message.
 | Last Message Identifier | 8 bits, unsigned  | Field defined in the header `MISSING_MESSAGES`.                |
 | Received Messages       | 64 bits, unsigned | Field defined in the header `MISSING_MESSAGES`.                |
 
-The field `User Identifier` **MUST** be ignored when this packet is sent by the server.
-
 ### `HEARTBEAT_BROADCAST`
 
 Request to notify of the health status of the client.
@@ -533,6 +529,7 @@ stateDiagram-v2
 		Suspicious --> Alive: Received HEARTBEAT_BROADCAST
 		Suspicious --> Alive: Received valid packet
 		Suspicious --> Dead: Timeout timer expired
+		Suspicious --> Dead: Received CONNECTION_CLOSED
 		Alive --> Dead: Received CONNECTION_CLOSED
 		Dead --> [*]
 	}
@@ -550,6 +547,7 @@ stateDiagram-v2
 | Suspicious    | Packet   | Received `HEARTBEAT_BROADCAST`             | Send `HEARTBEAT_RECEIVED`                   | Alive      |
 | Suspicious    | Packet   | Received any valid packet                  | Pass received package to next state         | Alive      |
 | Suspicious    | Timer    | `CLIENT_INACTIVITY_TIMEOUT` timer expired  | Unregister client                           | Dead       |
+| Suspicious    | Packet   | Received `CONNECTION_CLOSED`               | Unregister client                           | Dead       |
 | Dead          | Internal | Action Executed                            | Clean client resources                      | Terminated |
 
 ### Client
@@ -581,7 +579,7 @@ stateDiagram-v2
 | Online        | Packet      | Received `CONNECTION_CLOSED`               | Notify user of disconnection | Offline    |
 | Online        | User Action | User requested disconnection               | Send `CONNECTION_CLOSED`     | Offline    |
 
-#### Disconnection
+#### Termination
 
 ##### Diagram
 
@@ -654,7 +652,7 @@ When the client is initialized, the client **MUST** generate a `Client Identifie
 
 When the user attempts to connect, the client **MUST** send a `CONNECTION_REQUEST` packet, containing its `Client Identifier` and the user-provided username.
 
-When the server receives the `CONNECTION_REQUEST` packet, the server **MUST** extract the client's network address and the `Client Identifier` provided in the packet. Using these, the server **MUST** check if a session has been created for them.
+When the server receives the `CONNECTION_REQUEST` packet, the server **MUST** extract the client's network address and the field `Client Identifier` from the packet. Using these, the server **MUST** check if a session has been created for them.
 
 If a session is found, the server **MUST** respond with a `CONNECTION_ACCEPTED` packet, containing the `User Identifier` of the session.
 
@@ -666,9 +664,19 @@ When the server receives any valid packet other than `CONNECTION_REQUEST` after 
 
 If the client does not receive any valid packet and the timer of `SERVER_CONNECTION_TIMEOUT` expires, the client **MUST** stop attempting to connect to the server. The client **MAY** notify the user of the failure.
 
-If the server does not receive any valid packet from the client after the sending of the `CONNECTION_ACCEPTED` packet, the server **MUST** let the session die naturally. When the session dies, the server **MUST** release the related `User Identifier` and unbind the session. The server **MUST** unbind the client's network address, if no packet was received after the connection.
+If the server does not receive any valid packet from the client after the sending of the `CONNECTION_ACCEPTED` packet, the server **MUST** let the session die naturally.
 
-### Disconnection
+### Termination
+
+If the user requests a termination of the client, the client **MUST** send a `CONNECTION_CLOSED` packet, containing the `User Identifier` of the client. The client **SHOULD** initiate the tear down of local network resources.
+
+If the user requests a termination of the server, the server **SHOULD** send a `CONNECTION_CLOSED` packet to all the opened sessions, containing the value `0b000000` as the field `User Identifier`.
+
+When the client receives the `CONNECTION_CLOSED` packet, the client **MUST** extract the field `User Identifier` from the packet. If the field `User Identifier` is not `0b000000`, the client **MUST** ignore the packet. If the field `User Identifier` is `0b000000`, the client **MUST** disconnect its socket. The client **SHOULD** initiate the tear down of local network resources.
+
+When the server receives the `CONNECTION_CLOSED` packet, the server **MUST** extract the field `User Identifier` from the packet. If the field `User Identifier` is `0b000000`, the server **MUST** ignore the packet. If the field `User Identifier` is not `0b000000`, the server **MUST** mark the session as dead.
+
+When the session dies, the server **MUST** dissociate the client's network address from the `User Identifier`, if no packet was received after the session's creation. The server **MUST** dissociate the `User Identifier` from the session. The server **MUST** release the `User Identifier` and destroy the session.
 
 ### Heartbeat
 
