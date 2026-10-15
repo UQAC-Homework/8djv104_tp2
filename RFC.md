@@ -164,6 +164,70 @@ Header that allows to identify a packet for a given user.
 
 The field `User Identifier` **MUST** be unique across all connected users. The field `User Identifier` **MUST NOT** be `0b000000`.
 
+### `USERNAME_CONTENT`
+
+Header that allows to communicate the user name of a given user.
+
+#### Format
+
+```
+ 0               3
++-----------------+
+| Username Length |
++-----------------+
+
+ 4      131
++----------+
+| Username |
++----------+
+```
+
+#### Fields
+
+| Name            | Size               | Description                                               |
+| --------------- | ------------------ | --------------------------------------------------------- |
+| Username Length | 4 bits, unsigned   | Length of the username in bytes. **MUST** be offset by 1. |
+| Username        | 128 bits, unsigned | Characters of the username. **MUST** be ASCII characters. |
+
+The field `Username Length` is offset by one (1). For a username of one (1) character, the length **MUST** be `0x0`. For a username of 16 characters, the length **MUST** be `0xF`. This allows the
+username to be a maximum of 16 characters, while still fitting inside a nybble.
+
+The field `Username` **MUST** be of length defined by the field `Username Length`. The protocol **MUST NOT** assume that the field takes the full possible length. For a username of three (3) characters, the total size of the field `Username` will be `24` bits. Usernames with no character or a length of zero (0) or less **MUST NOT** be allowed.
+
+Each character of the field `Username` **MUST** is one (1) byte in length.
+
+
+### `MESSAGE_CONTENT`
+
+Header that allows to communicate a message.
+
+#### Format
+
+```
+ 0              9
++----------------+
+| Message Length |
++----------------+
+
+ 10   8009
++---------+
+| Message |
++---------+
+```
+
+#### Fields
+
+| Name           | Size                | Description                                              |
+| -------------- | ------------------- | -------------------------------------------------------- |
+| Message Length | 10 bits, unsigned   | Length of the message in bytes.                          |
+| Message        | 8000 bits, unsigned | Characters of the message. **MUST** be ASCII characters. |
+
+The field `Message Length` **MUST NOT** be more than `1000`. The field `Message Length` **MUST NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
+
+The field `Message` **MUST** be of length defined by the field `Message Length`. The server **MUST** discard any message that exceeds `1000` characters. The protocol **MUST NOT** assume that the field takes the full possible length. For a message of three (3) characters, the total size of the field `Message` will be `24` bits.
+
+Each character of the field `Message` **MUST** is one (1) byte in length.
+
 ### `MISSING_MESSAGES`
 
 Header that allows to notify of missing messages.
@@ -241,17 +305,10 @@ Request to establish a connection.
 | ----------------- | ------------------ | -------------------------------------------------------------- |
 | Type              | 8 bits, unsigned   | Field defined in the header `PACKET_TYPE`. **MUST** be `0x01`. |
 | Client Identifier | 4 bits, unsigned   | Client identifier for the local client instance.               |
-| Length            | 4 bits, unsigned   | Length of the username in bytes. **MUST** be offset by 1.      |
-| Username          | 128 bits, unsigned | Characters of the username. **MUST** be ASCII characters.      |
+| Username Length   | 4 bits, unsigned   | Field defined in the header `USERNAME_CONTENT`.                |
+| Username          | 128 bits, unsigned | Field defined in the header `USERNAME_CONTENT`.                |
 
 The field `Client Identifier` **MUST** be randomly generated.
-
-The field `Length` is offset by one (1). For a username of one (1) character, the length **MUST** be `0x0`. For a username of 16 characters, the length **MUST** be `0xF`. This allows the
-username to be a maximum of 16 characters, while still fitting inside a nybble.
-
-The field `Username` **MUST** be of length defined by the field `Length`. The protocol **MUST NOT** assume that the field takes the full possible length. For a username of three (3) characters, the total size of the field `Username` will be `24` bits. Usernames with no character or a length of zero (0) or less **MUST NOT** be allowed.
-
-Each character of the field `Username` **MUST** is one (1) byte in length.
 
 #### Examples
 
@@ -343,12 +400,12 @@ Exchange to notify that the connection is closed.
 | Type            | 8 bits, unsigned | Field defined in the header `PACKET_TYPE`. **MUST** be `0x02`. |
 | User Identifier | 6 bits, unsigned | Field defined in the header `USER_AUTHENTICATION`.             |
 
-### `MESSAGE_BROADCAST`
+### `MESSAGE_SUBMIT`
 
 > [!IMPORTANT]
 > Redesign
 
-Exchange to broadcast a message.
+Request to send a message.
 
 #### Format
 
@@ -373,12 +430,8 @@ Exchange to broadcast a message.
 | Last Message Identifier | 8 bits, unsigned    | Field defined in the header `MISSING_MESSAGES`.                 |
 | Received Messages       | 64 bits, unsigned   | Field defined in the header `MISSING_MESSAGES`.                 |
 | Message Identifier      | 8 bits, unsigned    | Identifier of the message. **MAY** be reused in other messages. |
-| Message Length          | 10 bits, unsigned   | Length of the message in bytes.                                 |
-| Message                 | 8000 bits, unsigned | Characters of the message. **MUST** be ASCII characters.        |
-
-The field `Message Length` **MUST NOT** be more than `1000`. The field `Message Length` **MUST NOT** be equal to zero (0). Any message with a length of zero (0) **MUST** be ignored.
-
-The field `Message` **MUST** be of length defined by the field `Message Length`. The server **MUST** discard any message that exceeds `1000` characters. The protocol **MUST NOT** assume that the field takes the full possible length. For a message of three (3) characters, the total size of the field `Message` will be `24` bits.
+| Message Length          | 10 bits, unsigned   | Field defined in the header `MESSAGE_CONTENT`.                  |
+| Message                 | 8000 bits, unsigned | Field defined in the header `MESSAGE_CONTENT`.                  |
 
 #### Examples
 
@@ -420,6 +473,45 @@ Message:
 	48 65 6C 6C 6F 20    57 6F 72 6C 64
 	H  e  l  l  o  Space W  o  r  l  d
 ```
+
+### `MESSAGE_BROADCAST`
+
+Push to broadcast a message.
+
+#### Format
+
+```
+ 0    7 8                 15 16             19
++------+--------------------+-----------------+
+| Type | Message Identifier | Username Length |
++------+--------------------+-----------------+
+
+ 20     147 148          157 
++----------+----------------+
+| Username | Message Length |
++----------+----------------+
+
+ 158  8157
++---------+
+| Message |
++---------+
+```
+
+#### Fields
+
+| Name               | Size                | Description                                                     |
+| ------------------ | ------------------- | --------------------------------------------------------------- |
+| Type               | 8 bits, unsigned    | Field defined in the header `PACKET_TYPE`. **MUST** be `0x10`.  |
+| Message Identifier | 8 bits, unsigned    | Identifier of the message. **MAY** be reused in other messages. |
+| Username Length    | 4 bits, unsigned    | Field defined in the header `USERNAME_CONTENT`.                 |
+| Username           | 128 bits, unsigned  | Field defined in the header `USERNAME_CONTENT`.                 |
+| Message Length     | 10 bits, unsigned   | Field defined in the header `MESSAGE_CONTENT`.                  |
+| Message            | 8000 bits, unsigned | Field defined in the header `MESSAGE_CONTENT`.                  |
+
+#### Examples
+
+> [!IMPORTANT]
+> Add example
 
 ### `MESSAGE_REQUEST`
 
@@ -637,12 +729,12 @@ stateDiagram-v2
 
 ##### Transition Table
 
-| Current State | Event       | Condition                    | Action                             | Next State |
-| ------------- | ----------- | ---------------------------- | ---------------------------------- | ---------- |
-| Online        | User Action | User submitted a message     | Send and cache `MESSAGE_BROADCAST` | Online     |
-| Online        | Packet      | Received `MESSAGE_BROADCAST` | Display message to user            | Online     |
-| Online        | Packet      | Received `MESSAGE_REQUEST`   | Send cached `MESSAGE_BROADCAST`    | Online     |
-| Online        | Internal    | Action executed              | Tear down local sockets            | Offline    |
+| Current State | Event       | Condition                    | Action                          | Next State |
+| ------------- | ----------- | ---------------------------- | ------------------------------- | ---------- |
+| Online        | User Action | User submitted a message     | Send and cache `MESSAGE_SUBMIT` | Online     |
+| Online        | Packet      | Received `MESSAGE_BROADCAST` | Display message to user         | Online     |
+| Online        | Packet      | Received `MESSAGE_REQUEST`   | Send cached `MESSAGE_SUBMIT`    | Online     |
+| Online        | Internal    | Action executed              | Tear down local sockets         | Offline    |
 
 ## Procedures
 
@@ -707,6 +799,8 @@ If the server receives a `HEARTBEAT_BROADCAST` packet or any valid packet, the s
 When the timer for `CLIENT_INACTIVITY_TIMEOUT` expires, the server **MUST** send a `CONNECTION_CLOSED` packet. The server **MUST** mark the session as dead.
 
 ### Message Identification
+
+### Message Broadcast
 
 ### Message Retransmission
 
