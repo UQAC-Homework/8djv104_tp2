@@ -646,9 +646,36 @@ stateDiagram-v2
 | Online        | Packet      | Received `MESSAGE_REQUEST`   | Send cached `MESSAGE_BROADCAST`    | Online     |
 | Online        | Internal    | Action executed              | Tear down local sockets            | Offline    |
 
-## Procédures
+## Procedures
 
-établissement, terminaison, heartbeat, numérotation, NACK, retransmission.
+### Connection
+
+When the client is initialized, the client **MUST** generate a `Client Identifier`, which is a random number between `0x0` and `0xF`.
+
+When the user attempts to connect, the client **MUST** send a `CONNECTION_REQUEST` packet, containing its `Client Identifier` and the user-provided username.
+
+When the server receives the `CONNECTION_REQUEST` packet, the server **MUST** extract the client's network address and the `Client Identifier` provided in the packet. Using these, the server **MUST** check if a session has been created for them.
+
+If a session is found, the server **MUST** respond with a `CONNECTION_ACCEPTED` packet, containing the `User Identifier` of the session.
+
+If no session was found, the server **MUST** generate a unique `User Identifier`. The server **MAY** fail to find a `User Identifier` that is not in use. If the server fails, it **MUST** respond with a `CONNECTION_REJECTED` packet. 
+
+If the server succeeds, the server **MUST** claim the generated `User Identifier` and create a session. The server **MUST** associate the `User Identifier` with the created session. The server **MUST** associate the combination of the client's network address and `Client Identifier` with the `User Identifier`. The server **MUST** respond with a `CONNECTION_ACCEPTED` packet, containing the `User Identifier`.
+
+When the server receives any valid packet other than `CONNECTION_REQUEST` after the session is created, the server **MUST** dissociate the client's network address and `Client Identifier` from the `User Identifier`. 
+
+If the client does not receive any valid packet and the timer of `SERVER_CONNECTION_TIMEOUT` expires, the client **MUST** stop attempting to connect to the server. The client **MAY** notify the user of the failure.
+
+If the server does not receive any valid packet from the client after the sending of the `CONNECTION_ACCEPTED` packet, the server **MUST** let the session die naturally. When the session dies, the server **MUST** release the related `User Identifier` and unbind the session. The server **MUST** unbind the client's network address, if no packet was received after the connection.
+
+### Disconnection
+
+### Heartbeat
+
+### Message Identification
+
+### Message Retransmission
+
 
 ## Constants
 
