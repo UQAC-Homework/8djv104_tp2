@@ -800,9 +800,19 @@ When the timer for `CLIENT_INACTIVITY_TIMEOUT` expires, the server **MUST** send
 
 ### Message Identification
 
-When the user submits a message, the client **MUST** associate the message with the current value of its local client-side message counter. The client **MUST** then increase this counter by one (1). The client **MUST** send a `MESSAGE_SUBMIT` packet, containing the client-side `Message Identifier` and the user-defined `Message`.
+The client **MUST** keep a message counter, starting at `0`. When the client increments its counter, the counter **MUST** wrap around. The server **MUST** keep a message counter for each session, starting at `0`. When the server increments its counter, the counter **MUST** wrap around.
 
-When the server receives a `MESSAGE_SUBMIT` packet, the server **MUST** extract the `User Identifier`, the client-side `Message Identifier` and the `Message` from the packet. The server **MUST** associate the message with the current value of its local server-side message counter. The server **MUST** associate the server-side `Message Identifier` to the `User Identifier`, and associate the server-side `Message Identifier` to the client-side `Message Identifier`.
+The client **MUST** initialize its `Last Message Identifier` to `0xFF` and its `Received Messages` to `0xFFFFFFFFFFFFFFFF`. The server **MUST** initialize its `Last Message Identifier` to `0xFF` and its `Received Messages` to `0xFFFFFFFFFFFFFFFF`. 
+
+When the client sends a `MESSAGE_SUBMIT` packet, the client **MUST** associate the `Message` with the current value of its counter, and then increase this counter by one (1).
+
+When the server receives a `MESSAGE_SUBMIT` packet, the server **MUST** extract the `Message Identifier` and `Received Messages` from the packet. The server **MUST** calculate the distance between the `Message Identifier` and the session's `Last Message Identifier`, using the following formula: `(Message Identifier - Last Message Identifier) % 256`.
+
+If the server calculates that the distance is between `1` and `127`, the server **MUST** set the session's `Last Message Identifier` to the `Message Identifier` of the packet. The server **MUST** update the session's `Received Messages` so that it describes the messages preceding the new `Last Message Identifier`, as defined by the header `MISSING_MESSAGES`. The previous `Last Message Identifier` **MUST** be marked as received, and the messages between the previous and the new `Last Message Identifier` **MUST** be marked as missing. The server **MUST** send a `MESSAGE_BROADCAST` packet to all clients. If the distance is greater than `1`, the server **MUST** send a `MESSAGE_REQUEST` packet to the client for the missing messages.
+
+Otherwise, the server **MUST** calculate the distance in the other direction, using the following formula: `(Last Message Identifier - Message Identifier) % 256`.
+
+If this distance is `0`, the server **MUST** ignore the packet. If this distance is between `1` and `64`, the server **MUST** check whether the message is marked as received in the session's `Received Messages`. If it is, the packet **MUST** be ignored. If it is not, the server **MUST** mark the message as received and send a `MESSAGE_BROADCAST` packet to all clients. If this distance is greater than `64`, the packet **MUST** be ignored.
 
 ### Message Broadcast
 
