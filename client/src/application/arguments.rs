@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 /// Structure used to store the arguments of the application
 pub struct Arguments {
     /// Network address of the server

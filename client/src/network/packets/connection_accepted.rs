@@ -11,7 +11,7 @@ pub struct ConnectionAcceptedPacket {
 impl Packet for ConnectionAcceptedPacket {
     const MAGIC: u8 = super::types::CONNECTION_ACCEPTED;
 
-    fn serialize(&self, writer: &mut PacketWriter) {
+    fn serialize(&self, _writer: &mut PacketWriter) {
         panic!("Clients are not allowed to accept connections.");
     }
 

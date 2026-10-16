@@ -1,0 +1,204 @@
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text(s: &str) -> MessageText {
+        MessageText::new(s).unwrap()
+    }
+
+    fn history_with(n: u32) -> SendHistory {
+        let mut h = SendHistory::new();
+        for i in 0..n {
+            h.record(text(&format!("m{i}")));
+        }
+        h
+    }
+
+    fn ids(v: Vec<(u8, &MessageText)>) -> Vec<u8> {
+        v.into_iter().map(|(id, _)| id).collect()
+    }
+
+    // ---- ReceiveWindow ---------------------------------------------------
+
+    #[test]
+    fn first_message_is_new_and_keeps_pre_stream_bits_set() {
+        let mut w = ReceiveWindow::new();
+        assert_eq!(w.accept(0), Arrival::New { distance: 1 });
+        assert_eq!(w.report(), MissingMessages { last: 0, received: u64::MAX });
+    }
+
+    #[test]
+    fn rfc_received_messages_example() {
+        let missing = [13u8, 40, 48, 49, 50, 53];
+        let mut w = ReceiveWindow::new();
+        for id in (0..=52u8).filter(|id| !missing.contains(id)) {
+            w.accept(id);
+        }
+        w.accept(54);
+        assert_eq!(
+            w.report(),
+            MissingMessages {
+                last: 54,
+                received: 0xFFFF_FEFF_FFFF_DFC6
+            }
+        );
+    }
+
+    #[test]
+    fn hole_then_late_arrival_then_duplicate() {
+        let mut w = ReceiveWindow::new();
+        for id in 0..=4 {
+            w.accept(id);
+        }
+        assert_eq!(w.accept(6), Arrival::New { distance: 2 });
+        assert_eq!(w.report().last, 6);
+        assert_eq!(w.report().received & 1, 0, "bit 0 is message 5");
+        assert_eq!(w.report().received & 0b10, 0b10, "message 4 was received");
+
+        assert_eq!(w.accept(5), Arrival::Late);
+        assert_eq!(w.report().received & 1, 1);
+        assert_eq!(w.accept(5), Arrival::Ignored);
+        assert_eq!(w.accept(6), Arrival::Ignored);
+    }
+
+    #[test]
+    fn large_jumps_clear_the_whole_window() {
+        let mut w = ReceiveWindow::new();
+        w.accept(0);
+        assert_eq!(w.accept(64), Arrival::New { distance: 64 });
+        // old `last` (0) is exactly 64 behind: bit 63.
+        assert_eq!(w.report().received, 1 << 63);
+        assert_eq!(w.accept(64 + 70), Arrival::New { distance: 70 });
+        assert_eq!(w.report().received, 0);
+    }
+
+    #[test]
+    fn messages_older_than_the_window_are_ignored() {
+        let mut w = ReceiveWindow::new();
+        for id in 0..=100u8 {
+            w.accept(id);
+        }
+        // 100 - 30 = 70 behind: outside the 64-message window.
+        assert_eq!(w.accept(30), Arrival::Ignored);
+        // 56 behind and already received.
+        assert_eq!(w.accept(44), Arrival::Ignored);
+    }
+
+    #[test]
+    fn distance_of_exactly_127_is_new_and_128_is_not() {
+        let mut w = ReceiveWindow::new();
+        w.accept(0);
+        assert_eq!(w.accept(127), Arrival::New { distance: 127 });
+        let mut w = ReceiveWindow::new();
+        w.accept(0);
+        // 128 ahead is treated as 128 behind: outside the window.
+        assert_eq!(w.accept(128), Arrival::Ignored);
+    }
+
+    #[test]
+    fn identifiers_wrap_around() {
+        let mut w = ReceiveWindow::new();
+        for id in 0..=255u8 {
+            assert!(matches!(w.accept(id), Arrival::New { distance: 1 }));
+        }
+        assert_eq!(w.report().last, 255);
+        assert_eq!(w.accept(0), Arrival::New { distance: 1 });
+        assert_eq!(w.accept(2), Arrival::New { distance: 2 });
+        assert_eq!(w.accept(1), Arrival::Late);
+    }
+
+    // ---- SendHistory -----------------------------------------------------
+
+    #[test]
+    fn nothing_sent_nothing_missing() {
+        let h = SendHistory::new();
+        assert!(h.missing(MissingMessages::INITIAL).is_empty());
+        assert!(h
+            .missing(MissingMessages { last: 5, received: 0 })
+            .is_empty());
+    }
+
+    #[test]
+    fn counter_starts_at_zero_and_wraps() {
+        let mut h = SendHistory::new();
+        assert_eq!(h.last_sent(), None);
+        assert_eq!(h.record(text("a")), 0);
+        assert_eq!(h.record(text("b")), 1);
+        let h = history_with(257);
+        assert_eq!(h.last_sent(), Some(0));
+    }
+
+    #[test]
+    fn unacknowledged_messages_are_missing() {
+        let h = history_with(3);
+        assert_eq!(ids(h.missing(MissingMessages::INITIAL)), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn rfc_lost_last_message_is_found_via_newer_than_last() {
+        let h = history_with(8); // 0..=7
+        let report = MissingMessages { last: 6, received: u64::MAX };
+        assert_eq!(ids(h.missing(report)), vec![7]);
+    }
+
+    #[test]
+    fn hole_in_bitmap_is_found() {
+        let h = history_with(10); // 0..=9
+        // last = 9, message 5 is bit 9 - 1 - 5 = 3.
+        let report = MissingMessages { last: 9, received: !(1u64 << 3) };
+        assert_eq!(ids(h.missing(report)), vec![5]);
+    }
+
+    #[test]
+    fn retransmits_oldest_first() {
+        let h = history_with(20); // 0..=19
+        let report = MissingMessages { last: 15, received: !(1u64 << 11) }; // id 3
+        assert_eq!(ids(h.missing(report)), vec![3, 16, 17, 18, 19]);
+    }
+
+    #[test]
+    fn fully_acknowledged_means_nothing_to_resend() {
+        let h = history_with(10);
+        let report = MissingMessages { last: 9, received: u64::MAX };
+        assert!(h.missing(report).is_empty());
+    }
+
+    #[test]
+    fn report_ahead_of_what_was_sent_is_ignored() {
+        let h = history_with(3); // last_sent = 2
+        let report = MissingMessages { last: 10, received: 0 };
+        assert!(h.report_is_ahead(report));
+        assert!(h.missing(report).is_empty());
+    }
+
+    #[test]
+    fn only_the_last_64_messages_can_be_retransmitted() {
+        let h = history_with(200); // last_sent = 199
+        let report = MissingMessages { last: 100, received: u64::MAX };
+        let expected: Vec<u8> = (136..=199).collect();
+        assert_eq!(ids(h.missing(report)), expected);
+    }
+
+    #[test]
+    fn modular_arithmetic_across_the_wrap() {
+        let h = history_with(300); // ids wrapped; last_sent = 299 % 256 = 43
+        assert_eq!(h.last_sent(), Some(43));
+        let report = MissingMessages { last: 40, received: u64::MAX };
+        assert_eq!(ids(h.missing(report)), vec![41, 42, 43]);
+
+        // message 250 (before the wrap) reported missing: 40 - 1 - n = 250.
+        let n = (40u8.wrapping_sub(1).wrapping_sub(250)) as u32; // 45
+        let report = MissingMessages { last: 40, received: !(1u64 << n) };
+        assert_eq!(ids(h.missing(report)), vec![250, 41, 42, 43]);
+    }
+
+    #[test]
+    fn bits_older_than_the_stream_are_never_retransmitted() {
+        let h = history_with(2); // 0, 1
+        // Bits for ids before 0 are 0 here, but nothing was ever sent there.
+        let report = MissingMessages { last: 1, received: 0 };
+        assert_eq!(ids(h.missing(report)), vec![0]);
+    }
+}

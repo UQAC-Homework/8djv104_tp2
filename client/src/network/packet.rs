@@ -65,23 +65,3 @@ impl fmt::Display for MessageText {
         f.write_str(&self.0)
     }
 }
-
-/// Header `MISSING_MESSAGES`: what the sender of a packet has received from
-/// the receiver of that packet.
-///
-/// Bit `n` of `received` (least significant bit first) is set when the
-/// message with identifier `last - 1 - n` (modulo 256) was received. `last`
-/// itself is always considered received.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MissingMessages {
-    pub last: u8,
-    pub received: u64,
-}
-
-impl MissingMessages {
-    /// Initial value on both sides: nothing received yet.
-    pub const INITIAL: Self = Self {
-        last: 0xFF,
-        received: u64::MAX,
-    };
-}

@@ -4,7 +4,7 @@
 //! between the UDP socket, the terminal and [`Client`], and sleeps until the
 //! client's next timer.
 
-use network::other::{DisconnectReason};
+use network::other::DisconnectReason;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::io::{self, BufRead, Write};
@@ -101,10 +101,11 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
     spawn_socket_reader(socket.try_clone()?, tx.clone());
     spawn_stdin_reader(tx);
 
-    let mut client = Client::new(username);
+    let client_identifier = random_client_id();
+    let mut client = Client::new(username, client_identifier);
     log_info!(
         "* connecting to {server} (client id {:#x})...",
-        client.client_id()
+        client_identifier
     );
     client.connect();
 
@@ -121,7 +122,7 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
             let Some(text) = typed_before_online.pop_front() else {
                 break;
             };
-            let _ = client.send_message(now, text);
+            let _ = client.send_message(text);
         }
 
         while let Some(event) = client.poll_event() {
@@ -138,7 +139,7 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
         if input_closed && client.is_online() && typed_before_online.is_empty() {
             let deadline = *drain_deadline.get_or_insert(now + DRAIN_LIMIT);
             if !client.has_unacknowledged() || now >= deadline {
-                client.disconnect(now);
+                client.disconnect();
                 continue;
             }
         }
@@ -152,19 +153,18 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
             None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
         };
 
-        let now = Instant::now();
         match input {
             Ok(Input::Datagram(data)) => {
                 match decode_packet(&data) {
                     Ok(packet) => log_debug!("<- {packet:?}"),
                     Err(e) => log_debug!("<- discarded: {e}"),
                 }
-                client.handle_packet(now, &data);
+                client.handle_packet(&data);
             }
             Ok(Input::Line(line)) => {
                 let line = line.trim_end_matches('\r');
                 if line == "/quit" {
-                    client.disconnect(now);
+                    client.disconnect();
                 } else if !line.is_empty() {
                     match MessageText::new(line) {
                         Ok(text) => typed_before_online.push_back(text),
@@ -181,7 +181,7 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
-        client.handle_timeout(now);
+        client.handle_timeout();
     }
     Ok(exit_code)
 }
@@ -232,12 +232,6 @@ fn show(event: &UserEvent) -> io::Result<Option<i32>> {
     Ok(code)
 }
 
-fn printable(s: &str) -> String {
-    s.chars()
-        .map(|c| if c.is_ascii_control() { '?' } else { c })
-        .collect()
-}
-
 fn spawn_socket_reader(socket: UdpSocket, tx: Sender<Input>) {
     thread::spawn(move || {
         let mut buf = [0u8; 2048];
@@ -275,4 +269,11 @@ fn spawn_stdin_reader(tx: Sender<Input>) {
         }
         let _ = tx.send(Input::StdinClosed);
     });
+}
+
+fn random_client_id() -> u8 {
+    use std::collections::hash_map::RandomState;
+    use std::hash::BuildHasher;
+    // `RandomState` is seeded randomly per process; four bits are enough.
+    (RandomState::new().hash_one(std::process::id()) & 0x0F) as u8
 }

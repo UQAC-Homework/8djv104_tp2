@@ -8,11 +8,11 @@ pub struct ConnectionRejectedPacket {}
 impl Packet for ConnectionRejectedPacket {
     const MAGIC: u8 = super::types::CONNECTION_REJECTED;
 
-    fn serialize(&self, writer: &mut PacketWriter) {
+    fn serialize(&self, _writer: &mut PacketWriter) {
         panic!("Clients are not allowed to reject connections.");
     }
 
-    fn deserialize(reader: &mut PacketReader) -> Result<Self, FieldError> {
+    fn deserialize(_reader: &mut PacketReader) -> Result<Self, FieldError> {
         Ok(Self {})
     }
 }

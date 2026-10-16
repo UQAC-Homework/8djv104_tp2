@@ -1,7 +1,6 @@
-use std::fmt;
-use std::time::Instant;
 use crate::time::repeater::Repeater;
 use crate::time::timeout::Timeout;
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisconnectReason {
@@ -46,11 +45,13 @@ pub struct Session {
 pub enum Liveness {
     /// `Online`: `INACTIVITY_WARNING` is running and restarts whenever the
     /// client sends a packet.
-    Idle { warn_at: Instant },
+    Idle {
+        inactivity_timeout: Timeout,
+    },
     /// `Wait`: heartbeats go out every `HEARTBEAT_INTERVAL` until the server
     /// answers or `SERVER_INACTIVITY_TIMEOUT` expires.
     Waiting {
-        server_timeout_timer: Timeout,
-        heartbeat_repeater: Repeater,
+        server_timeout: Timeout,
+        heartbeat_interval: Repeater,
     },
 }
