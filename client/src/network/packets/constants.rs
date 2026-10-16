@@ -1,0 +1,1 @@
+pub const MESSAGE_CONTENT_MAX_LENGTH: u16 = 990;
