@@ -24,7 +24,13 @@ impl PacketWriter {
 
     /// Gets the buffer of the writer
     pub fn buffer(&self) -> &[u8] {
-        &self.buffer[..self.length / 8]
+        let mut used_length = self.offset / 8;
+        
+        if self.offset % 8 != 0 {
+            used_length += 1;
+        }
+
+        &self.buffer[..used_length]
     }
 
     /// Checks if the writer can write the given amount of bits
