@@ -1,7 +1,9 @@
+use crate::network::packet::FieldError;
 use crate::network::packets::packet::Packet;
 use crate::network::serialization::packet_reader::PacketReader;
 use crate::network::serialization::packet_writer::PacketWriter;
 
+#[derive(Debug, Clone)]
 pub struct MessageBroadcastPacket {
     pub message_identifier: u8,
     pub last_message_identifier: u8,
@@ -17,9 +19,7 @@ impl Packet for MessageBroadcastPacket {
         panic!("Clients cannot broadcast messages.");
     }
 
-    fn deserialize(reader: &mut PacketReader) -> Self {
-        reader.read_byte();
-
+    fn deserialize(reader: &mut PacketReader) -> Result<Self, FieldError> {
         let message_id = reader.read_byte();
         let last_message_id = reader.read_byte();
         let received_messages = reader.read_quadword();
@@ -28,12 +28,12 @@ impl Packet for MessageBroadcastPacket {
         let message_length = reader.read_nybble();
         let message = reader.read_string(message_length as usize);
 
-        Self {
+        Ok(Self {
             message_identifier: message_id,
             last_message_identifier: last_message_id,
             received_messages,
             username,
             message,
-        }
+        })
     }
 }

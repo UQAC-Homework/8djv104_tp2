@@ -1,11 +1,10 @@
-use crate::network::packet;
-use crate::network::packet::{FieldError};
+use crate::network::packet::FieldError;
 use std::fmt;
 
 /// Longest username, in bytes
 const MAX_USERNAME_LEN: usize = 16;
 
-/// A username: 1 to 16 ASCII characters.
+/// Structure used to define the name of a user
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Username {
     content: String,
@@ -14,12 +13,22 @@ pub struct Username {
 impl Username {
     pub fn new(name: impl Into<String>) -> Result<Self, FieldError> {
         let name = name.into();
-        packet::check_text(&name, MAX_USERNAME_LEN)?;
+
+        if name.is_empty() {
+            return Err(FieldError::Empty);
+        }
+
+        if !name.is_ascii() {
+            return Err(FieldError::NotAscii);
+        }
+
+        if name.len() > MAX_USERNAME_LEN {
+            return Err(FieldError::TooLong {
+                max: MAX_USERNAME_LEN,
+            });
+        }
+
         Ok(Self { content: name })
-    }
-    
-    pub fn bytes(&self) -> &[u8] {
-        self.content.as_bytes()
     }
 }
 

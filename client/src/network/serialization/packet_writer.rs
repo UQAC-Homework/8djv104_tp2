@@ -84,7 +84,7 @@ impl PacketWriter {
     }
 
     /// Writes the given string
-    pub fn write_string(&mut self, s: &str) {
+    pub fn write_string(&mut self, s: &String) {
         let value_length = s.len();
 
         if !self.can_write(value_length * 8) {

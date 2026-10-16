@@ -21,7 +21,9 @@ pub fn read_variable_u8(buffer: &[u8], offset: &mut usize, size: usize) -> u8 {
     // Extract from current byte
     else {
         let shift = 8 - bit_offset - size;
-        value = (buffer[position] >> shift) & ((1 << size) - 1);
+        let mask = u8::MAX >> (8 - size);
+
+        value = (buffer[position] >> shift) & mask;
     }
 
     offset.add_assign(size);

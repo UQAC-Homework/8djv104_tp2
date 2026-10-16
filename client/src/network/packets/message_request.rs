@@ -1,7 +1,9 @@
+use crate::network::packet::FieldError;
 use crate::network::packets::packet::Packet;
 use crate::network::serialization::packet_reader::PacketReader;
 use crate::network::serialization::packet_writer::PacketWriter;
 
+#[derive(Debug, Clone)]
 pub struct MessageRequestPacket {
     pub user_identifier: u8,
     pub last_message_identifier: u8,
@@ -12,23 +14,20 @@ impl Packet for MessageRequestPacket {
     const MAGIC: u8 = super::types::MESSAGE_REQUEST;
 
     fn serialize(&self, writer: &mut PacketWriter) {
-        writer.write_byte(Self::MAGIC);
         writer.write_sextet(self.user_identifier);
         writer.write_byte(self.last_message_identifier);
         writer.write_quadword(self.received_messages);
     }
 
-    fn deserialize(reader: &mut PacketReader) -> Self {
-        reader.read_byte();
-
+    fn deserialize(reader: &mut PacketReader) -> Result<Self, FieldError> {
         let user_id = reader.read_sextet();
         let last_message_identifier = reader.read_byte();
         let received_messages = reader.read_quadword();
 
-        Self {
+        Ok(Self {
             user_identifier: user_id,
             last_message_identifier,
             received_messages,
-        }
+        })
     }
 }

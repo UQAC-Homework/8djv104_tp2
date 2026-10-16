@@ -21,20 +21,26 @@ use crate::application::constants::{
     HEARTBEAT_INTERVAL, INACTIVITY_WARNING, SERVER_CONNECTION_INTERVAL, SERVER_CONNECTION_TIMEOUT,
     SERVER_INACTIVITY_TIMEOUT,
 };
+use crate::models::username::Username;
 use crate::network::other::{DisconnectReason, Event, Liveness, NotOnline, Session, State};
-use crate::network::packet::{MessageText, MissingMessages, Packet};
+use crate::network::packet::{MessageText, MissingMessages};
+use crate::network::packets::connection_accepted::ConnectionAcceptedPacket;
 use crate::network::packets::connection_closed::ConnectionClosedPacket;
 use crate::network::packets::connection_request::ConnectionRequestPacket;
 use crate::network::packets::heartbeat_broadcast::HeartbeatBroadcastPacket;
+use crate::network::packets::heartbeat_received::HeartbeatReceivedPacket;
+use crate::network::packets::heartbeat_request::HeartbeatRequestPacket;
+use crate::network::packets::message_broadcast::MessageBroadcastPacket;
 use crate::network::packets::message_request::MessageRequestPacket;
 use crate::network::packets::message_submit::MessageSubmitPacket;
-use crate::network::packets::packet::{Packet as Packet2, encode_packet};
+use crate::network::packets::packet::{
+    NetworkPacket, Packet as Packet2, decode_packet, encode_packet,
+};
 use crate::network::reliability::{Arrival, ReceiveWindow, SendHistory};
 use crate::time::repeater::Repeater;
 use crate::time::timeout::Timeout;
 use std::collections::VecDeque;
 use std::time::Instant;
-use crate::models::username::Username;
 
 pub struct Client {
     username: Username,
@@ -53,15 +59,11 @@ pub struct Client {
 impl Client {
     /// Creates an offline client with a random `Client Identifier`.
     pub fn new(username: Username) -> Self {
-        Self::with_client_id(username, random_client_id())
-    }
+        let client_identifier = random_client_id();
 
-    /// Like [`Client::new`] with a fixed identifier (only the low 4 bits are
-    /// used). Mostly useful for tests.
-    pub fn with_client_id(username: Username, client_id: u8) -> Self {
         Self {
             username,
-            client_id: client_id & 0x0F,
+            client_id: client_identifier & 0x0F,
             state: State::Offline,
             rx: ReceiveWindow::new(),
             tx: SendHistory::new(),
@@ -144,7 +146,7 @@ impl Client {
     /// Processes one received datagram. Malformed packets and unsupported
     /// types are discarded, as the RFC requires.
     pub fn handle_packet(&mut self, now: Instant, datagram: &[u8]) {
-        let Ok(packet) = Packet::decode(datagram) else {
+        let Ok(packet) = decode_packet(datagram) else {
             return;
         };
         match self.state {
@@ -154,18 +156,20 @@ impl Client {
         }
     }
 
-    fn on_connecting(&mut self, now: Instant, packet: Packet) {
+    fn on_connecting(&mut self, now: Instant, packet: NetworkPacket) {
         match packet {
-            Packet::ConnectionAccepted { user_id } => {
+            NetworkPacket::ConnectionAccepted(ConnectionAcceptedPacket { user_identifier }) => {
                 self.state = State::Online(Session {
-                    user_id,
+                    user_id: user_identifier,
                     liveness: Liveness::Idle {
                         warn_at: now + INACTIVITY_WARNING,
                     },
                 });
-                self.events.push_back(Event::Connected { user_id });
+                self.events.push_back(Event::Connected {
+                    user_id: user_identifier,
+                });
             }
-            Packet::ConnectionRejected => {
+            NetworkPacket::ConnectionRejected(_) => {
                 self.state = State::Offline;
                 self.events.push_back(Event::Rejected);
             }
@@ -173,22 +177,31 @@ impl Client {
         }
     }
 
-    fn on_online(&mut self, now: Instant, packet: Packet) {
+    fn on_online(&mut self, now: Instant, packet: NetworkPacket) {
         match packet {
             // Only the reserved identifier 0 (server shutdown) ends the
             // session; any other value is ignored (RFC "Termination").
-            Packet::ConnectionClosed { user_id: 0 } => {
+            NetworkPacket::ConnectionClosed(ConnectionClosedPacket { user_identifier }) => {
+                if user_identifier != 0b000000 {
+                    return;
+                }
+
                 self.state = State::Offline;
                 self.events
                     .push_back(Event::Disconnected(DisconnectReason::ServerClosed));
             }
-            Packet::MessageBroadcast {
-                message_id,
-                report,
+            NetworkPacket::MessageBroadcast(MessageBroadcastPacket {
+                message_identifier,
+                last_message_identifier,
+                received_messages,
                 username,
                 message,
-            } => {
-                let arrival = self.rx.accept(message_id);
+            }) => {
+                let report = MissingMessages {
+                    last: last_message_identifier,
+                    received: received_messages,
+                };
+                let arrival = self.rx.accept(message_identifier);
                 if let Arrival::New { distance } = arrival {
                     if distance > 1 {
                         self.request_missing(now);
@@ -204,12 +217,40 @@ impl Client {
                     });
                 }
             }
-            Packet::MessageRequest { report, .. } => self.process_report(now, report),
-            Packet::HeartbeatReceived { report } => {
+            NetworkPacket::MessageRequest(MessageRequestPacket {
+                last_message_identifier,
+                received_messages,
+                ..
+            }) => {
+                let report = MissingMessages {
+                    last: last_message_identifier,
+                    received: received_messages,
+                };
+
+                self.process_report(now, report)
+            }
+            NetworkPacket::HeartbeatReceived(HeartbeatReceivedPacket {
+                last_message_identifier,
+                received_messages,
+                ..
+            }) => {
+                let report = MissingMessages {
+                    last: last_message_identifier,
+                    received: received_messages,
+                };
+
                 self.process_report(now, report);
                 self.back_to_idle(now);
             }
-            Packet::HeartbeatRequest { report } => {
+            NetworkPacket::HeartbeatRequest(HeartbeatRequestPacket {
+                last_message_identifier,
+                received_messages,
+                ..
+            }) => {
+                let report = MissingMessages {
+                    last: last_message_identifier,
+                    received: received_messages,
+                };
                 self.process_report(now, report);
                 self.send_heartbeat(now);
                 self.back_to_idle(now);
@@ -318,7 +359,7 @@ impl Client {
                             .push_back(Event::Disconnected(DisconnectReason::ServerUnreachable));
                     } else if heartbeat_repeater.is_due() {
                         heartbeat_repeater.reset();
-                        
+
                         self.send_heartbeat(now);
                     }
                 }
@@ -365,7 +406,7 @@ impl Client {
     fn send_connection_request(&mut self) {
         let packet = ConnectionRequestPacket {
             client_identifier: self.client_id,
-            username: self.username.clone().to_string(),
+            username: self.username.clone(),
         };
         self.outbox.push_back(encode_packet(&packet));
     }

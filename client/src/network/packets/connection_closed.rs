@@ -1,8 +1,10 @@
 use crate::network::other::Session;
+use crate::network::packet::FieldError;
 use crate::network::packets::packet::Packet;
 use crate::network::serialization::packet_reader::PacketReader;
 use crate::network::serialization::packet_writer::PacketWriter;
 
+#[derive(Debug, Clone)]
 pub struct ConnectionClosedPacket {
     pub user_identifier: u8,
 }
@@ -14,18 +16,15 @@ impl Packet for ConnectionClosedPacket {
             panic!("Invalid user identifier");
         }
 
-        writer.write_byte(Self::MAGIC);
         writer.write_sextet(self.user_identifier);
     }
 
-    fn deserialize(reader: &mut PacketReader) -> Self {
-        reader.read_byte();
-
+    fn deserialize(reader: &mut PacketReader) -> Result<Self, FieldError> {
         let user_id = reader.read_sextet();
 
-        Self {
+        Ok(Self {
             user_identifier: user_id,
-        }
+        })
     }
 }
 

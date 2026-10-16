@@ -13,15 +13,16 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
-mod network;
 mod application;
-mod time;
 mod models;
+mod network;
+mod time;
 
 use crate::application::arguments::Arguments;
 use crate::models::username::Username;
 use crate::network::client::Client;
-use crate::network::packet::{MAX_MESSAGE_LEN, MessageText, Packet};
+use crate::network::packet::{MAX_MESSAGE_LEN, MessageText};
+use crate::network::packets::packet::decode_packet;
 
 const USAGE: &str = "\
 Usage: udp-chat-client [--verbose] <server:port> <username>
@@ -147,7 +148,7 @@ fn run() -> Result<i32, Box<dyn Error>> {
         match input {
             Ok(Input::Datagram(data)) => {
                 if verbose {
-                    match Packet::decode(&data) {
+                    match decode_packet(&data) {
                         Ok(packet) => eprintln!("<- {packet:?}"),
                         Err(e) => eprintln!("<- discarded: {e}"),
                     }
@@ -182,9 +183,10 @@ fn run() -> Result<i32, Box<dyn Error>> {
 fn flush_transmits(client: &mut Client, socket: &UdpSocket, verbose: bool) -> io::Result<()> {
     while let Some(datagram) = client.poll_transmit() {
         if verbose {
-            if let Ok(packet) = Packet::decode(&datagram) {
-                eprintln!("-> {packet:?}");
-            }
+            //if let Ok(packet) = decode_packet(&datagram) {
+            //eprintln!("-> {packet:?}");
+            eprintln!("-> {datagram:?}");
+            //}
         }
         match socket.send(&datagram) {
             Ok(_) => {}
