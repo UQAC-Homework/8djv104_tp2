@@ -1,8 +1,8 @@
-#include "../../include/serialization/PackerWriter.h"
+#include "../../../include/network/serialization/PackerWriter.h"
 
 #include <stdexcept>
 #include <vector>
-#include "../../include/serialization/WriteHelper.h"
+#include "../../../include/network/serialization/WriteHelper.h"
 
 std::vector<uint8_t> PacketWriter::getBuffer() const
 {

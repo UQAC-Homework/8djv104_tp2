@@ -8,14 +8,13 @@
 #include <array>
 #include <chrono>
 #include <cmath>
-#include <cstdint>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
+#include "include/network/SessionManager.h"
 #include "include/network/packets/types.h"
 #include "include/network/serialization/PackerWriter.h"
 #include "include/network/serialization/PacketReader.h"
@@ -30,34 +29,6 @@ namespace protocol
 
 	namespace
 	{
-		struct StoredMessage
-		{
-			bool valid = false;
-			uint8_t id = 0;
-			std::string username;
-			std::string text;
-		};
-
-		struct Session
-		{
-			sockaddr_in address{};
-			uint8_t clientId = 0;
-			uint8_t userId = 0;
-			std::string username;
-
-			// Receive tracking for messages submitted by this client.
-			uint8_t lastClientMessageId = 0xFF;
-			uint64_t receivedClientMessages = UINT64_MAX;
-
-			// Server-to-client message sequence and retransmission history.
-			uint8_t nextServerMessageId = 0;
-			std::array<StoredMessage, HISTORY_SIZE> history{};
-
-			Clock::time_point lastPacket = Clock::now();
-			bool suspicious = false;
-			Clock::time_point nextHeartbeatRequest = Clock::now();
-		};
-
 		class Server
 		{
 		public:
@@ -75,6 +46,8 @@ namespace protocol
 					socket_ = -1;
 					throw std::runtime_error("bind() failed");
 				}
+
+				sessionManager = {};
 			}
 
 			~Server() { if (socket_ >= 0) close(socket_); }
@@ -109,7 +82,7 @@ namespace protocol
 		private:
 			int socket_ = -1;
 			uint16_t port_;
-			std::unordered_map<unsigned, Session> sessions_;
+			SessionManager sessionManager;
 
 			void send_packet(const sockaddr_in& to, const std::vector<uint8_t>& bytes) const
 			{
@@ -130,32 +103,6 @@ namespace protocol
 				send_packet(to, writer.getBuffer());
 			}
 
-			static bool same_endpoint(const sockaddr_in& a, const sockaddr_in& b)
-			{
-				return a.sin_family == b.sin_family && a.sin_port == b.sin_port &&
-					a.sin_addr.s_addr == b.sin_addr.s_addr;
-			}
-
-			std::optional<unsigned> find_session(const sockaddr_in& peer, const uint8_t clientId) const
-			{
-				for (const auto& [id, s] : sessions_)
-					if (same_endpoint(s.address, peer) && s.clientId == clientId) return id;
-				return std::nullopt;
-			}
-
-			uint8_t allocate_user_id() const
-			{
-				for (uint8_t id = 1; id <= 63; ++id) if (!sessions_.contains(id)) return id;
-				return 0;
-			}
-
-			Session* authenticated_session(const uint8_t userId, const sockaddr_in& peer)
-			{
-				const auto it = sessions_.find(userId);
-				if (it == sessions_.end() || !same_endpoint(it->second.address, peer)) return nullptr;
-				return &it->second;
-			}
-
 			void handle_packet(const uint8_t* data, const std::size_t size, const sockaddr_in& peer)
 			{
 				if (size == 0)
@@ -171,11 +118,11 @@ namespace protocol
 					{
 					case CONNECTION_REQUEST: handle_connection_request(reader, peer);
 						break;
-					case CONNECTION_CLOSED: handle_connection_closed(reader, peer);
+					case CONNECTION_CLOSED: handle_connection_closed(reader);
 						break;
-					case MESSAGE_SUBMIT: handle_message_submit(reader, peer);
+					case MESSAGE_SUBMIT: handle_message_submit(reader);
 						break;
-					case MESSAGE_REQUEST: handle_message_request(reader, peer);
+					case MESSAGE_REQUEST: handle_message_request(reader);
 						break;
 					case HEARTBEAT_BROADCAST: handle_heartbeat(reader, peer);
 						break;
@@ -198,54 +145,44 @@ namespace protocol
 
 				const std::string name = reader.readString(username_length);
 
-				const auto existing = find_session(peer, client_identifier);
+				const auto existing_session = sessionManager.find_session(peer, client_identifier);
 
 				// Retries must return the original user ID, even if the username differs.
-				if (existing.has_value())
+				if (existing_session != nullptr)
 				{
-					auto& s = sessions_.at(*existing);
-					s.lastPacket = Clock::now();
-					s.suspicious = false;
-					send_user_packet(peer, CONNECTION_ACCEPTED, s.userId);
+					existing_session->refresh();
+					send_user_packet(peer, CONNECTION_ACCEPTED, existing_session->userId);
 					return;
 				}
 
-				const uint8_t id = allocate_user_id();
+				const auto user_identifier = sessionManager.create_session(
+					peer,
+					client_identifier,
+					name
+				);
 
-				if (id == 0)
+				if (!user_identifier.has_value())
 				{
 					send_type(peer, CONNECTION_REJECTED);
 					return;
 				}
 
-				Session s;
-				s.address = peer;
-				s.clientId = client_identifier;
-				s.userId = id;
-				s.username = name;
-				s.lastPacket = Clock::now();
-				sessions_.emplace(id, std::move(s));
-				send_user_packet(peer, CONNECTION_ACCEPTED, id);
+				send_user_packet(
+					peer,
+					CONNECTION_ACCEPTED,
+					user_identifier.value()
+				);
 
-				std::cout << "User '" << name << "' has connected (ID: " << id << ")" << std::endl;
+				std::cout << "User '" << name << "' has connected (ID: " << user_identifier.value() << ")" << std::endl;
 			}
 
-			void handle_connection_closed(PacketReader& reader, const sockaddr_in& peer)
+			void handle_connection_closed(PacketReader& reader)
 			{
 				const auto user_identifier = reader.readSextet();
 
-				// Invalid user ID
-				if (user_identifier == 0)
-					return;
+				sessionManager.delete_session(user_identifier);
 
-				const Session* s = authenticated_session(user_identifier, peer);
-
-				if (s == nullptr)
-					return;
-
-				std::cout << "User '" << s->username << "' has disconnected." << std::endl;
-
-				sessions_.erase(user_identifier);
+				std::cout << "User with the ID " << user_identifier << " has been disconnected." << std::endl;
 			}
 
 			// Update our view of messages submitted by the client. Bit zero describes
@@ -274,14 +211,17 @@ namespace protocol
 
 			// The peer's last/bitmap describe which server-to-peer messages arrived.
 			// Retransmit only messages in the 64-slot history, oldest first.
-			void process_peer_ack(const Session& s, const uint8_t peerLast, const uint64_t peerBitmap) const
+			void process_peer_ack(const Session* session, const uint8_t peerLast, const uint64_t peerBitmap) const
 			{
-				const auto lastSent = static_cast<uint8_t>(s.nextServerMessageId - 1);
+				if (session == nullptr)
+					return;
+
+				const auto lastSent = static_cast<uint8_t>(session->nextServerMessageId - 1);
 				const auto peerAhead = static_cast<uint8_t>(peerLast - lastSent);
 				if (peerAhead >= 1 && peerAhead <= 127) return; // invalid/future acknowledgement
 
 				std::vector<StoredMessage> missing;
-				for (const auto& m : s.history)
+				for (const auto& m : session->history)
 				{
 					if (!m.valid) continue;
 					const auto ahead = static_cast<uint8_t>(m.id - peerLast);
@@ -304,7 +244,9 @@ namespace protocol
 				{
 					return static_cast<uint8_t>(newest - a.id) > static_cast<uint8_t>(newest - b.id);
 				});
-				for (const auto& m : missing) send_message_broadcast(s, m, true);
+
+				for (const auto& message : missing)
+					send_message_broadcast(session, message);
 			}
 
 			void handle_heartbeat(PacketReader& reader, const sockaddr_in& peer)
@@ -313,35 +255,29 @@ namespace protocol
 				const auto last_message_identifier = reader.readByte();
 				const auto received_messages = reader.readQuadword();
 
-				Session* s = authenticated_session(user_identifier, peer);
+				const auto session = sessionManager.get_session(user_identifier);
 
-				if (s == nullptr)
+				if (session == nullptr)
 					return;
 
-				mark_alive(*s);
-				process_peer_ack(*s, last_message_identifier, received_messages);
-				send_receive_status(peer, HEARTBEAT_RECEIVED, *s);
+				session->refresh();
+				process_peer_ack(session, last_message_identifier, received_messages);
+				send_receive_status(peer, HEARTBEAT_RECEIVED, *session);
 			}
 
-			void handle_message_request(PacketReader& reader, const sockaddr_in& peer)
+			void handle_message_request(PacketReader& reader)
 			{
 				const auto user_identifier = reader.readSextet();
 				const auto last_message_identifier = reader.readByte();
 				const auto received_messages = reader.readQuadword();
 
-				Session* s = authenticated_session(user_identifier, peer);
+				const auto session = sessionManager.get_session(user_identifier);
 
-				if (s == nullptr)
+				if (session == nullptr)
 					return;
 
-				mark_alive(*s);
-				process_peer_ack(*s, last_message_identifier, received_messages);
-			}
-
-			static void mark_alive(Session& s)
-			{
-				s.lastPacket = Clock::now();
-				s.suspicious = false;
+				session->refresh();
+				process_peer_ack(session, last_message_identifier, received_messages);
 			}
 
 			void send_receive_status(const sockaddr_in& to, const uint8_t type, const Session& s) const
@@ -353,7 +289,7 @@ namespace protocol
 				send_packet(to, writer.getBuffer());
 			}
 
-			void handle_message_submit(PacketReader& reader, const sockaddr_in& peer)
+			void handle_message_submit(PacketReader& reader)
 			{
 				const auto user_identifier = reader.readSextet();
 				const auto last_message_identifier = reader.readByte();
@@ -366,13 +302,13 @@ namespace protocol
 
 				const auto message = reader.readString(message_length);
 
-				Session* sender = authenticated_session(user_identifier, peer);
+				const auto sender = sessionManager.get_session(user_identifier);
 
 				if (sender == nullptr)
 					return;
 
-				mark_alive(*sender);
-				process_peer_ack(*sender, last_message_identifier, received_messages);
+				sender->refresh();
+				process_peer_ack(sender, last_message_identifier, received_messages);
 
 				if (!identify_client_message(*sender, message_identifier))
 					return;
@@ -380,66 +316,73 @@ namespace protocol
 				std::cout << "User '" << sender->username << "' has sent: '" << message << "'." << std::endl;
 
 				// Each recipient has an independent server-side message counter/history.
-				for (auto& [recipientId, recipient] : sessions_)
+				sessionManager.for_each_session([&](Session& session)
 				{
-					(void)recipientId;
-					send_new_broadcast(recipient, sender->username, message);
-				}
+					send_new_broadcast(&session, sender->username, message);
+				});
 			}
 
-			void send_new_broadcast(Session& recipient, const std::string& username, const std::string& message) const
+			void send_new_broadcast(Session* recipient, const std::string& username, const std::string& message) const
 			{
+				if (recipient == nullptr)
+					return;
+
 				StoredMessage stored;
 				stored.valid = true;
-				stored.id = recipient.nextServerMessageId;
+				stored.id = recipient->nextServerMessageId;
 				stored.username = username;
 				stored.text = message;
-				recipient.history[stored.id % HISTORY_SIZE] = stored; // cache before first send
-				recipient.nextServerMessageId = static_cast<uint8_t>(recipient.nextServerMessageId + 1);
-				send_message_broadcast(recipient, stored, false);
+				recipient->history[stored.id % HISTORY_SIZE] = stored; // cache before first send
+				recipient->nextServerMessageId = static_cast<uint8_t>(recipient->nextServerMessageId + 1);
+				send_message_broadcast(recipient, stored);
 			}
 
-			void send_message_broadcast(const Session& recipient, const StoredMessage& stored,
-			                            bool retransmission) const;
+			void send_message_broadcast(const Session* recipient, const StoredMessage& stored) const;
 
 			void tick()
 			{
 				const auto now = Clock::now();
-				std::vector<unsigned> remove;
-				for (auto& [id, s] : sessions_)
+				std::vector<uint8_t> remove;
+
+				sessionManager.for_each_session([&](Session& session)
 				{
-					const auto idle = now - s.lastPacket;
-					if (!s.suspicious && idle >= std::chrono::milliseconds(1500))
+					const auto idle = now - session.lastPacket;
+
+					if (!session.suspicious && idle >= std::chrono::milliseconds(1500))
 					{
-						s.suspicious = true;
-						s.nextHeartbeatRequest = now;
+						session.suspicious = true;
+						session.nextHeartbeatRequest = now;
 					}
-					if (s.suspicious && idle >= std::chrono::seconds(3))
+
+					if (session.suspicious && idle >= std::chrono::seconds(3))
 					{
-						send_user_packet(s.address, CONNECTION_CLOSED, 0b000000);
-						std::cout << s.username << " timed out\n";
-						remove.push_back(id);
-						continue;
+						std::cout << "User '" << session.username << "' has timed out." << std::endl;
+						send_user_packet(session.address, CONNECTION_CLOSED, SERVER_USER_IDENTIFIER);
+						remove.push_back(session.userId);
+						return;
 					}
-					if (s.suspicious && now >= s.nextHeartbeatRequest)
+
+					if (session.suspicious && now >= session.nextHeartbeatRequest)
 					{
 						// HEARTBEAT_REQUEST reports the server's receive state for this client.
 						PacketWriter writer;
 						writer.writeByte(HEARTBEAT_REQUEST);
-						writer.writeByte(s.lastClientMessageId);
-						writer.writeQuadword(s.receivedClientMessages);
-						send_packet(s.address, writer.getBuffer());
-						s.nextHeartbeatRequest = now + std::chrono::milliseconds(200);
+						writer.writeByte(session.lastClientMessageId);
+						writer.writeQuadword(session.receivedClientMessages);
+						send_packet(session.address, writer.getBuffer());
+						session.nextHeartbeatRequest = now + std::chrono::milliseconds(200);
 					}
-				}
-				for (unsigned id : remove) sessions_.erase(id);
+				});
+
+				for (const auto id : remove)
+					sessionManager.delete_session(id);
 			}
 		};
 
-		void Server::send_message_broadcast(const Session& recipient, const StoredMessage& stored,
-		                                    const bool retransmission) const
+		void Server::send_message_broadcast(const Session* recipient, const StoredMessage& stored) const
 		{
-			(void)retransmission;
+			if (recipient == nullptr)
+				return;
 
 			if (stored.username.empty() || stored.username.size() > MAX_USERNAME ||
 				stored.text.empty() || stored.text.size() > MAX_MESSAGE)
@@ -449,14 +392,14 @@ namespace protocol
 
 			writer.writeByte(MESSAGE_BROADCAST);
 			writer.writeByte(stored.id);
-			writer.writeByte(recipient.lastClientMessageId);
-			writer.writeQuadword(recipient.receivedClientMessages);
+			writer.writeByte(recipient->lastClientMessageId);
+			writer.writeQuadword(recipient->receivedClientMessages);
 			writer.writeNybble(stored.username.size() - 1);
 			writer.writeString(stored.username);
 			writer.writeDeclet(stored.text.size());
 			writer.writeString(stored.text);
 
-			send_packet(recipient.address, writer.getBuffer());
+			send_packet(recipient->address, writer.getBuffer());
 		}
 	}
 } // namespace protocol

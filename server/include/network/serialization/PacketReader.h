@@ -32,7 +32,7 @@ public:
 	uint64_t readQuadword();
 
 	/// Reads a string of the given character length
-	std::string readString(std::size_t length);
+	std::string readString(std::size_t size);
 
 private:
 	/// Buffer to read from

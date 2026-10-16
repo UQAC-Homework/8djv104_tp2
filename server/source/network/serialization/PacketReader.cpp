@@ -1,5 +1,5 @@
-#include "../../include/serialization/PacketReader.h"
-#include "../../include/serialization/ReadHelper.h"
+#include "../../../include/network/serialization/PacketReader.h"
+#include "../../../include/network/serialization/ReadHelper.h"
 
 #include <stdexcept>
 
@@ -53,18 +53,18 @@ uint64_t PacketReader::readQuadword()
 	return readVariableU64(buffer, offset, 64);
 }
 
-std::string PacketReader::readString(const std::size_t length)
+std::string PacketReader::readString(const std::size_t size)
 {
 	// Check the length in bytes first so `length * 8` can't overflow
-	if (length > (this->length - offset) / 8)
+	if (size > (this->length - offset) / 8)
 		throw std::out_of_range(
-			"Cannot read a string of " + std::to_string(length) +
+			"Cannot read a string of " + std::to_string(size) +
 			" characters from the buffer.");
 
 	std::string result;
-	result.reserve(length);
+	result.reserve(size);
 
-	for (std::size_t i = 0; i < length; ++i)
+	for (std::size_t i = 0; i < size; ++i)
 		result.push_back(static_cast<char>(readByte()));
 
 	return result;
