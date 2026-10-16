@@ -16,6 +16,9 @@ public:
 	 */
 	PacketReader(const uint8_t* buffer, std::size_t length);
 
+	/// Skips the given amount of bits
+	void skip(std::size_t count);
+
 	/// Reads a nybble (4 bits)
 	uint8_t readNybble();
 
@@ -33,6 +36,9 @@ public:
 
 	/// Reads a string of the given character length
 	std::string readString(std::size_t size);
+
+	/// Asserts if the reader is at the end of the buffer
+	void assert_finish() const;
 
 private:
 	/// Buffer to read from

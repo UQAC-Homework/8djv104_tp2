@@ -8,6 +8,14 @@ PacketReader::PacketReader(const uint8_t* buffer, const std::size_t length)
 {
 }
 
+void PacketReader::skip(const std::size_t count)
+{
+	if (!canRead(count))
+		throw std::out_of_range("Cannot skip " + std::to_string(count) + " bits from the buffer.");
+
+	offset += count;
+}
+
 bool PacketReader::canRead(const std::size_t size) const
 {
 	return offset + size <= length;
@@ -68,4 +76,10 @@ std::string PacketReader::readString(const std::size_t size)
 		result.push_back(static_cast<char>(readByte()));
 
 	return result;
+}
+
+void PacketReader::assert_finish() const
+{
+	if (offset < length)
+		throw std::range_error("Buffer was not read completely.");
 }

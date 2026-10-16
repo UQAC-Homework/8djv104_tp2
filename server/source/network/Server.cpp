@@ -25,27 +25,39 @@ Server::~Server()
 void Server::run()
 {
 	std::cout << "Listening on UDP port " << port << "\n";
-	for (;;)
+
+	while (true)
 	{
 		tick();
+
 		fd_set set;
 		FD_ZERO(&set);
 		FD_SET(socket, &set);
 		timeval timeout{.tv_sec = 0, .tv_usec = 50000};
+
 		const int ready = select(socket + 1, &set, nullptr, nullptr, &timeout);
+
 		if (ready < 0)
 		{
-			if (errno == EINTR) continue;
+			if (errno == EINTR)
+				continue;
+
 			std::perror("select");
 			continue;
 		}
-		if (ready == 0) continue;
+
+		if (ready == 0)
+			continue;
+
 		std::array<uint8_t, MAX_DATAGRAM> buffer{};
 		sockaddr_in peer{};
 		socklen_t peerLength = sizeof(peer);
+
 		const ssize_t count = recvfrom(socket, buffer.data(), buffer.size(), 0,
 		                               reinterpret_cast<sockaddr*>(&peer), &peerLength);
-		if (count > 0) handle_packet(buffer.data(), static_cast<std::size_t>(count), peer);
+
+		if (count > 0)
+			handle_packet(buffer.data(), static_cast<std::size_t>(count), peer);
 	}
 }
 
@@ -110,6 +122,8 @@ void Server::handle_connection_request(PacketReader& reader, const sockaddr_in& 
 
 	const std::string name = reader.readString(username_length);
 
+	reader.assert_finish();
+
 	const auto existing_session = sessionManager.find_session(peer, client_identifier);
 
 	// Retries must return the original user ID, even if the username differs.
@@ -138,12 +152,16 @@ void Server::handle_connection_request(PacketReader& reader, const sockaddr_in& 
 		user_identifier.value()
 	);
 
-	std::cout << "User '" << name << "' has connected (ID: " << user_identifier.value() << ")" << std::endl;
+	std::cout << "User '" << name << "' has connected (ID: " << std::to_string(user_identifier.value()) << ")" <<
+		std::endl;
 }
 
 void Server::handle_connection_closed(PacketReader& reader)
 {
 	const auto user_identifier = reader.readSextet();
+
+	reader.skip(2);
+	reader.assert_finish();
 
 	sessionManager.delete_session(user_identifier);
 
@@ -216,6 +234,9 @@ void Server::handle_heartbeat(PacketReader& reader, const sockaddr_in& peer)
 	const auto last_message_identifier = reader.readByte();
 	const auto received_messages = reader.readQuadword();
 
+	reader.skip(2);
+	reader.assert_finish();
+
 	const auto session = sessionManager.get_session(user_identifier);
 
 	if (session == nullptr)
@@ -231,6 +252,9 @@ void Server::handle_message_request(PacketReader& reader)
 	const auto user_identifier = reader.readSextet();
 	const auto last_message_identifier = reader.readByte();
 	const auto received_messages = reader.readQuadword();
+
+	reader.skip(2);
+	reader.assert_finish();
 
 	const auto session = sessionManager.get_session(user_identifier);
 
@@ -262,6 +286,8 @@ void Server::handle_message_submit(PacketReader& reader)
 		return;
 
 	const auto message = reader.readString(message_length);
+
+	reader.assert_finish();
 
 	const auto sender = sessionManager.get_session(user_identifier);
 
