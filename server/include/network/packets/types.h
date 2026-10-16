@@ -1,6 +1,5 @@
 #ifndef SERVER_TYPES_H
 #define SERVER_TYPES_H
-#include <cstdint>
 
 constexpr uint8_t CONNECTION_REQUEST = 0x01;
 constexpr uint8_t CONNECTION_ACCEPTED = 0x02;

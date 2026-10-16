@@ -9,6 +9,20 @@ void Session::refresh()
 	suspicious = false;
 }
 
+uint8_t Session::add_message(const std::string& sender_name, const std::string& message)
+{
+	StoredMessage stored;
+	stored.valid = true;
+	stored.id = nextServerMessageId;
+	stored.username = sender_name;
+	stored.text = message;
+
+	history[stored.id % HISTORY_SIZE] = stored;
+	nextServerMessageId = static_cast<uint8_t>(nextServerMessageId + 1);
+
+	return stored.id;
+}
+
 Session* SessionManager::find_session(const sockaddr_in& address, const uint8_t client_identifier)
 {
 	for (auto& session : sessions | std::views::values)

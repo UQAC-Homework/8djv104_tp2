@@ -41,6 +41,9 @@ struct Session
 
 	/// Refresh the session's activity
 	void refresh();
+
+	/// Adds the given message to the history
+	[[nodiscard]] uint8_t add_message(const std::string& sender_name, const std::string& message);
 };
 
 /// Class responsible to manage user sessions
