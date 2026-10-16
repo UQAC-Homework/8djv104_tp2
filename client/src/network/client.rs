@@ -21,8 +21,9 @@ use crate::application::constants::{
     HEARTBEAT_INTERVAL, INACTIVITY_WARNING, SERVER_CONNECTION_INTERVAL, SERVER_CONNECTION_TIMEOUT,
     SERVER_INACTIVITY_TIMEOUT,
 };
+use crate::application::events::event::UserEvent;
 use crate::models::username::Username;
-use crate::network::other::{DisconnectReason, Event, Liveness, NotOnline, Session, State};
+use crate::network::other::{DisconnectReason, Liveness, NotOnline, Session, State};
 use crate::network::packet::{MessageText, MissingMessages};
 use crate::network::packets::connection_accepted::ConnectionAcceptedPacket;
 use crate::network::packets::connection_closed::ConnectionClosedPacket;
@@ -53,7 +54,7 @@ pub struct Client {
     /// The latest usable report received from the server.
     peer: MissingMessages,
     outbox: VecDeque<Vec<u8>>,
-    events: VecDeque<Event>,
+    events: VecDeque<UserEvent>,
 }
 
 impl Client {
@@ -134,7 +135,7 @@ impl Client {
                 self.transmit(now, &ConnectionClosedPacket::close_session(session));
                 self.state = State::Offline;
                 self.events
-                    .push_back(Event::Disconnected(DisconnectReason::UserRequested));
+                    .push_back(UserEvent::Disconnected(DisconnectReason::UserRequested));
             }
             State::Connecting { .. } => self.state = State::Offline,
             State::Offline => {}
@@ -165,13 +166,11 @@ impl Client {
                         warn_at: now + INACTIVITY_WARNING,
                     },
                 });
-                self.events.push_back(Event::Connected {
-                    user_id: user_identifier,
-                });
+                self.events.push_back(UserEvent::Connected {});
             }
             NetworkPacket::ConnectionRejected(_) => {
                 self.state = State::Offline;
-                self.events.push_back(Event::Rejected);
+                self.events.push_back(UserEvent::Rejected);
             }
             _ => {}
         }
@@ -188,7 +187,7 @@ impl Client {
 
                 self.state = State::Offline;
                 self.events
-                    .push_back(Event::Disconnected(DisconnectReason::ServerClosed));
+                    .push_back(UserEvent::Disconnected(DisconnectReason::ServerClosed));
             }
             NetworkPacket::MessageBroadcast(MessageBroadcastPacket {
                 message_identifier,
@@ -210,10 +209,9 @@ impl Client {
                 // Duplicates carry fresh reports too.
                 self.process_report(now, report);
                 if arrival != Arrival::Ignored {
-                    self.events.push_back(Event::Message {
+                    self.events.push_back(UserEvent::Message {
                         sender: username.to_string(),
                         text: message.to_string(),
-                        late: arrival == Arrival::Late,
                     });
                 }
             }
@@ -328,7 +326,7 @@ impl Client {
             } => {
                 if timeout_timer.has_expired() {
                     self.state = State::Offline;
-                    self.events.push_back(Event::ConnectFailed);
+                    self.events.push_back(UserEvent::Timeout);
                 } else if retry_repeater.is_due() {
                     retry_repeater.reset();
                     self.state = State::Connecting {
@@ -356,7 +354,7 @@ impl Client {
                         self.transmit(now, &ConnectionClosedPacket::close_session(session));
                         self.state = State::Offline;
                         self.events
-                            .push_back(Event::Disconnected(DisconnectReason::ServerUnreachable));
+                            .push_back(UserEvent::Disconnected(DisconnectReason::ServerUnreachable));
                     } else if heartbeat_repeater.is_due() {
                         heartbeat_repeater.reset();
 
@@ -376,7 +374,7 @@ impl Client {
     }
 
     /// Next event to show to the user.
-    pub fn poll_event(&mut self) -> Option<Event> {
+    pub fn poll_event(&mut self) -> Option<UserEvent> {
         self.events.pop_front()
     }
 

@@ -4,7 +4,7 @@
 //! between the UDP socket, the terminal and [`Client`], and sleeps until the
 //! client's next timer.
 
-use network::other::{DisconnectReason, Event};
+use network::other::{DisconnectReason};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::io::{self, BufRead, Write};
@@ -19,6 +19,7 @@ mod network;
 mod time;
 
 use crate::application::arguments::Arguments;
+use crate::application::events::event::UserEvent;
 use crate::application::logger;
 use crate::application::logger::Level;
 use crate::models::username::Username;
@@ -168,7 +169,9 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
                     match MessageText::new(line) {
                         Ok(text) => typed_before_online.push_back(text),
                         Err(e) => {
-                            log_error!("! message not sent: it {e} (1-{MAX_MESSAGE_LEN} characters)")
+                            log_error!(
+                                "! message not sent: it {e} (1-{MAX_MESSAGE_LEN} characters)"
+                            )
                         }
                     }
                 }
@@ -205,41 +208,27 @@ fn flush_transmits(client: &mut Client, socket: &UdpSocket) -> io::Result<()> {
 }
 
 /// Prints an event. Returns an exit code for events that end the program.
-fn show(event: &Event) -> io::Result<Option<i32>> {
+fn show(event: &UserEvent) -> io::Result<Option<i32>> {
     let mut out = io::stdout().lock();
+
+    if matches!(event, UserEvent::Message { .. }) {
+        writeln!(out, "{}", event)?;
+        out.flush()?;
+        return Ok(None);
+    }
+
+    log_info!("* {}", event);
+
     let code = match event {
-        Event::Connected { user_id } => {
-            log_info!("* connected as user {user_id}");
-            None
-        }
-        Event::Rejected => {
-            log_info!("* the server rejected the connection");
-            Some(1)
-        }
-        Event::ConnectFailed => {
-            log_info!("* could not reach the server");
-            Some(1)
-        }
-        Event::Message { sender, text, .. } => {
-            // Other users control this text: keep control characters away
-            // from the terminal.
-            writeln!(out, "<{}> {}", printable(sender), printable(text))?;
-            out.flush()?;
-            None
-        }
-        Event::Disconnected(DisconnectReason::UserRequested) => {
-            log_info!("* disconnected");
-            Some(0)
-        }
-        Event::Disconnected(DisconnectReason::ServerClosed) => {
-            log_info!("* the server closed the connection");
-            Some(1)
-        }
-        Event::Disconnected(DisconnectReason::ServerUnreachable) => {
-            log_info!("* the server stopped answering; connection closed");
-            Some(1)
-        }
+        UserEvent::Connected => None,
+        UserEvent::Rejected => Some(1),
+        UserEvent::Timeout => Some(1),
+        UserEvent::Disconnected(DisconnectReason::UserRequested) => Some(0),
+        UserEvent::Disconnected(DisconnectReason::ServerClosed) => Some(1),
+        UserEvent::Disconnected(DisconnectReason::ServerUnreachable) => Some(1),
+        _ => None,
     };
+
     Ok(code)
 }
 

@@ -13,25 +13,6 @@ pub enum DisconnectReason {
     ServerUnreachable,
 }
 
-/// Something the user interface should show.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Event {
-    Connected {
-        user_id: u8,
-    },
-    /// The server answered `CONNECTION_REJECTED`.
-    Rejected,
-    /// `SERVER_CONNECTION_TIMEOUT` expired.
-    ConnectFailed,
-    /// A message to display; `late` is true when it filled a hole.
-    Message {
-        sender: String,
-        text: String,
-        late: bool,
-    },
-    Disconnected(DisconnectReason),
-}
-
 /// Returned by [`Client::send_message`] when there is no session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NotOnline;
