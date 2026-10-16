@@ -1,4 +1,4 @@
-use crate::network::serialization::write_helper::{write_variable_u8, write_variable_u16};
+use crate::network::serialization::write_helper::{write_variable_u8, write_variable_u16, write_variable_u64};
 
 /// Structure used to write packets into a binary format
 pub struct PacketWriter {
@@ -74,7 +74,7 @@ impl PacketWriter {
             panic!("Cannot write a quadword to the buffer.");
         }
 
-        todo!()
+        write_variable_u64(&mut self.buffer, &mut self.offset, value, 64);
     }
 
     /// Writes the given string

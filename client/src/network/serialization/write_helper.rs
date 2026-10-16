@@ -24,22 +24,37 @@ pub fn write_variable_u8(buffer: &mut [u8], offset: &mut usize, value: u8, size:
 }
 
 /// Writes the given bits into the buffer
+fn write_variable_chunks(buffer: &mut [u8], offset: &mut usize, value: u128, size: usize) {
+    let full_bytes = size / 8;
+    let remainder = size % 8;
+
+    // Write each full byte (MSB first)
+    for i in (0..full_bytes).rev() {
+        let chunk = ((value >> (i * 8 + remainder)) & 0xFF) as u8;
+        write_variable_u8(buffer, offset, chunk, 8);
+    }
+
+    // Write remaining bits
+    if remainder > 0 {
+        let chunk = (value & ((1 << remainder) - 1)) as u8;
+        write_variable_u8(buffer, offset, chunk, remainder);
+    }
+}
+
+/// Writes the given bits into the buffer
 pub fn write_variable_u16(buffer: &mut [u8], offset: &mut usize, value: u16, size: usize) {
     assert!(size <= 16, "Size cannot exceed 16 bits");
+    write_variable_chunks(buffer, offset, value as u128, size);
+}
 
-    if size <= 8 {
-        write_variable_u8(buffer, offset, value as u8, size);
-    } else if size == 16 {
-        let upper = value >> 8;
-        let lower = value & 0xFF;
+/// Writes the given bits into the buffer
+pub fn write_variable_u32(buffer: &mut [u8], offset: &mut usize, value: u32, size: usize) {
+    assert!(size <= 32, "Size cannot exceed 32 bits");
+    write_variable_chunks(buffer, offset, value as u128, size);
+}
 
-        write_variable_u8(buffer, offset, upper as u8, 8);
-        write_variable_u8(buffer, offset, lower as u8, 8);
-    } else {
-        let remaining_size = size - (size % 8);
-        let upper = value >> remaining_size;
-
-        write_variable_u8(buffer, offset, upper as u8, 8);
-        write_variable_u8(buffer, offset, upper as u8, remaining_size);
-    }
+/// Writes the given bits into the buffer
+pub fn write_variable_u64(buffer: &mut [u8], offset: &mut usize, value: u64, size: usize) {
+    assert!(size <= 64, "Size cannot exceed 64 bits");
+    write_variable_chunks(buffer, offset, value as u128, size);
 }

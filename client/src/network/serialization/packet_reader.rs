@@ -1,4 +1,4 @@
-use crate::network::serialization::read_helper::{read_variable_u8, read_variable_u16};
+use crate::network::serialization::read_helper::{read_variable_u8, read_variable_u16, read_variable_u64};
 
 /// Structure used to read packets from a binary format
 pub struct PacketReader<'a> {
@@ -59,12 +59,17 @@ impl<'buf> PacketReader<'buf> {
         if !self.can_read(10) {
             panic!("Cannot read a declet from the buffer.");
         }
+
         read_variable_u16(self.buffer, &mut self.offset, 10)
     }
 
     /// Reads the given quadword
     pub fn read_quadword(&mut self) -> u64 {
-        todo!()
+        if !self.can_read(64) {
+            panic!("Cannot read a quadword from the buffer.");
+        }
+
+        read_variable_u64(self.buffer, &mut self.offset, 64)
     }
 
     /// Reads the given string of a specified character length

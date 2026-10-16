@@ -29,20 +29,38 @@ pub fn read_variable_u8(buffer: &[u8], offset: &mut usize, size: usize) -> u8 {
 }
 
 /// Reads the given bits from the buffer
+fn read_variable_chunks(buffer: &[u8], offset: &mut usize, size: usize) -> u128 {
+    let mut value: u128 = 0;
+    let full_bytes = size / 8;
+    let remainder = size % 8;
+
+    for _ in 0..full_bytes {
+        let byte = read_variable_u8(buffer, offset, 8) as u128;
+        value = (value << 8) | byte;
+    }
+
+    if remainder > 0 {
+        let rem_val = read_variable_u8(buffer, offset, remainder) as u128;
+        value = (value << remainder) | rem_val;
+    }
+
+    value
+}
+
+/// Reads the given bits from the buffer
 pub fn read_variable_u16(buffer: &[u8], offset: &mut usize, size: usize) -> u16 {
     assert!(size <= 16, "Size cannot exceed 16 bits");
+    read_variable_chunks(buffer, offset, size) as u16
+}
 
-    if size <= 8 {
-        read_variable_u8(buffer, offset, size) as u16
-    } else if size == 16 {
-        let upper = read_variable_u8(buffer, offset, 8) as u16;
-        let lower = read_variable_u8(buffer, offset, 8) as u16;
-        (upper << 8) | lower
-    } else {
-        let remaining_size = size - 8;
-        let upper = read_variable_u8(buffer, offset, 8) as u16;
-        let lower = read_variable_u8(buffer, offset, remaining_size) as u16;
+/// Reads the given bits from the buffer
+pub fn read_variable_u32(buffer: &[u8], offset: &mut usize, size: usize) -> u32 {
+    assert!(size <= 32, "Size cannot exceed 32 bits");
+    read_variable_chunks(buffer, offset, size) as u32
+}
 
-        (upper << remaining_size) | lower
-    }
+/// Reads the given bits from the buffer
+pub fn read_variable_u64(buffer: &[u8], offset: &mut usize, size: usize) -> u64 {
+    assert!(size <= 64, "Size cannot exceed 64 bits");
+    read_variable_chunks(buffer, offset, size) as u64
 }
