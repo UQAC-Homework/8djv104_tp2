@@ -135,7 +135,7 @@ impl Client {
                 self.transmit(now, &ConnectionClosedPacket::close_session(session));
                 self.state = State::Offline;
                 self.events
-                    .push_back(UserEvent::Disconnected(DisconnectReason::UserRequested));
+                    .push_back(UserEvent::disconnect_by_user());
             }
             State::Connecting { .. } => self.state = State::Offline,
             State::Offline => {}
@@ -187,7 +187,7 @@ impl Client {
 
                 self.state = State::Offline;
                 self.events
-                    .push_back(UserEvent::Disconnected(DisconnectReason::ServerClosed));
+                    .push_back(UserEvent::disconnected_by_server());
             }
             NetworkPacket::MessageBroadcast(MessageBroadcastPacket {
                 message_identifier,
@@ -209,10 +209,7 @@ impl Client {
                 // Duplicates carry fresh reports too.
                 self.process_report(now, report);
                 if arrival != Arrival::Ignored {
-                    self.events.push_back(UserEvent::Message {
-                        sender: username.to_string(),
-                        text: message.to_string(),
-                    });
+                    self.events.push_back(UserEvent::new_message(username, message));
                 }
             }
             NetworkPacket::MessageRequest(MessageRequestPacket {
@@ -354,7 +351,7 @@ impl Client {
                         self.transmit(now, &ConnectionClosedPacket::close_session(session));
                         self.state = State::Offline;
                         self.events
-                            .push_back(UserEvent::Disconnected(DisconnectReason::ServerUnreachable));
+                            .push_back(UserEvent::disconnected_by_timeout());
                     } else if heartbeat_repeater.is_due() {
                         heartbeat_repeater.reset();
 

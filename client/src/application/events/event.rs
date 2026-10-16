@@ -39,3 +39,28 @@ impl fmt::Display for UserEvent {
         code.fmt(f)
     }
 }
+
+impl UserEvent {
+    /// Creates a new event for the new given message
+    pub fn new_message(username: String, text: String) -> UserEvent {
+        UserEvent::Message {
+            sender: username,
+            text,
+        }
+    }
+
+    /// Creates a new event for when the client disconnects by the user
+    pub fn disconnect_by_user() -> UserEvent {
+        UserEvent::Disconnected(DisconnectReason::UserRequested)
+    }
+    
+    /// Creates a new event for when the client disconnects by the server
+    pub fn disconnected_by_server() -> UserEvent {
+        UserEvent::Disconnected(DisconnectReason::ServerClosed)
+    }
+    
+    /// Creates a new event for when the client disconnects by a timeout
+    pub fn disconnected_by_timeout() -> UserEvent {
+        UserEvent::Disconnected(DisconnectReason::ServerUnreachable)
+    }
+}
