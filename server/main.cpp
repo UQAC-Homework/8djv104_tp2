@@ -1,8 +1,3 @@
-// UDP chat server implementing the server-side behavior described by RFC.md.
-// Linux/POSIX, C++17.
-// Build: g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 chat_server.cpp -o chat-server
-// Run:   ./chat-server [port]
-
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -35,34 +30,6 @@ namespace protocol
 
 	namespace
 	{
-		// Protocol fields are packed most-significant-bit first. Packets are sent as
-		// whole bytes; any unused bits at the end of a packet are zero padding.
-		class BitReader
-		{
-		public:
-			BitReader(const uint8_t* data, const std::size_t size) : data_(data), bits_(size * 8)
-			{
-			}
-
-			bool get(const std::size_t offset, const unsigned width, uint64_t& value) const
-			{
-				if (width > 64 || offset > bits_ || width > bits_ - offset) return false;
-				value = 0;
-				for (unsigned i = 0; i < width; ++i)
-				{
-					const auto bit = offset + i;
-					value = (value << 1) | ((data_[bit / 8] >> (7 - bit % 8)) & 1u);
-				}
-				return true;
-			}
-
-			[[nodiscard]] std::size_t size_bits() const { return bits_; }
-
-		private:
-			const uint8_t* data_;
-			std::size_t bits_;
-		};
-
 		struct StoredMessage
 		{
 			bool valid = false;
@@ -184,97 +151,101 @@ namespace protocol
 
 			Session* authenticated_session(const uint8_t userId, const sockaddr_in& peer)
 			{
-				auto it = sessions_.find(userId);
+				const auto it = sessions_.find(userId);
 				if (it == sessions_.end() || !same_endpoint(it->second.address, peer)) return nullptr;
 				return &it->second;
 			}
 
-			static bool valid_ascii(const std::string& s)
-			{
-				return std::ranges::all_of(s, [](const unsigned char c) { return c <= 0x7F; });
-			}
-
-			static bool read_ascii(const BitReader& r, const std::size_t offset, const std::size_t length,
-			                       std::string& out)
-			{
-				out.clear();
-				out.reserve(length);
-				for (std::size_t i = 0; i < length; ++i)
-				{
-					uint64_t ch = 0;
-					if (!r.get(offset + i * 8, 8, ch) || ch > 0x7F) return false;
-					out.push_back(static_cast<char>(ch));
-				}
-				return true;
-			}
-
-			static std::size_t padded_bits(const std::size_t bits) { return (bits + 7) / 8 * 8; }
-
 			void handle_packet(const uint8_t* data, const std::size_t size, const sockaddr_in& peer)
 			{
-				if (size == 0) return;
-				const BitReader r(data, size);
-				uint64_t raw = 0;
-				if (!r.get(0, 8, raw) || raw == 0) return;
-				switch (static_cast<uint8_t>(raw))
+				if (size == 0)
+					return;
+
+				PacketReader reader(data, size);
+
+				try
 				{
-				case CONNECTION_REQUEST: handle_connection_request(r, peer);
-					break;
-				case CONNECTION_CLOSED: handle_connection_closed(r, peer);
-					break;
-				case MESSAGE_SUBMIT: handle_message_submit(r, peer);
-					break;
-				case MESSAGE_REQUEST: handle_message_request(r, peer);
-					break;
-				case HEARTBEAT_BROADCAST: handle_heartbeat(r, peer);
-					break;
-				default: break; // unsupported types are ignored
+					const auto raw = reader.readByte();
+
+					switch (raw)
+					{
+					case CONNECTION_REQUEST: handle_connection_request(reader, peer);
+						break;
+					case CONNECTION_CLOSED: handle_connection_closed(reader, peer);
+						break;
+					case MESSAGE_SUBMIT: handle_message_submit(reader, peer);
+						break;
+					case MESSAGE_REQUEST: handle_message_request(reader, peer);
+						break;
+					case HEARTBEAT_BROADCAST: handle_heartbeat(reader, peer);
+						break;
+					default: break; // unsupported types are ignored
+					}
+				}
+				catch (std::exception& e)
+				{
+					std::cerr << "Error while handling packet: " << e.what() << std::endl;
 				}
 			}
 
-			void handle_connection_request(const BitReader& r, const sockaddr_in& peer)
+			void handle_connection_request(PacketReader& reader, const sockaddr_in& peer)
 			{
-				uint64_t clientId = 0, lengthMinusOne = 0;
-				if (!r.get(8, 4, clientId) || !r.get(12, 4, lengthMinusOne)) return;
-				const std::size_t n = lengthMinusOne + 1;
-				if (n > MAX_USERNAME || r.size_bits() != padded_bits(16 + n * 8)) return;
-				std::string name;
-				if (!read_ascii(r, 16, n, name) || !valid_ascii(name)) return;
+				const auto client_identifier = reader.readNybble();
+				const auto username_length = reader.readNybble() + 1;
 
-				if (const auto existing = find_session(peer, static_cast<uint8_t>(clientId)))
+				if (username_length > MAX_USERNAME)
+					return;
+
+				const std::string name = reader.readString(username_length);
+
+				const auto existing = find_session(peer, client_identifier);
+
+				// Retries must return the original user ID, even if the username differs.
+				if (existing.has_value())
 				{
 					auto& s = sessions_.at(*existing);
-					// Retries must return the original user ID, even if the username differs.
 					s.lastPacket = Clock::now();
 					s.suspicious = false;
 					send_user_packet(peer, CONNECTION_ACCEPTED, s.userId);
 					return;
 				}
+
 				const uint8_t id = allocate_user_id();
-				if (!id)
+
+				if (id == 0)
 				{
 					send_type(peer, CONNECTION_REJECTED);
 					return;
 				}
+
 				Session s;
 				s.address = peer;
-				s.clientId = static_cast<uint8_t>(clientId);
+				s.clientId = client_identifier;
 				s.userId = id;
 				s.username = name;
 				s.lastPacket = Clock::now();
 				sessions_.emplace(id, std::move(s));
 				send_user_packet(peer, CONNECTION_ACCEPTED, id);
-				std::cout << name << " connected (user id " << static_cast<unsigned>(id) << ")\n";
+
+				std::cout << "User '" << name << "' has connected (ID: " << id << ")" << std::endl;
 			}
 
-			void handle_connection_closed(const BitReader& r, const sockaddr_in& peer)
+			void handle_connection_closed(PacketReader& reader, const sockaddr_in& peer)
 			{
-				uint64_t id = 0;
-				if (r.size_bits() != 16 || !r.get(8, 6, id) || id == 0) return;
-				Session* s = authenticated_session(static_cast<uint8_t>(id), peer);
-				if (!s) return;
-				std::cout << s->username << " disconnected\n";
-				sessions_.erase(static_cast<unsigned>(id));
+				const auto user_identifier = reader.readSextet();
+
+				// Invalid user ID
+				if (user_identifier == 0)
+					return;
+
+				const Session* s = authenticated_session(user_identifier, peer);
+
+				if (s == nullptr)
+					return;
+
+				std::cout << "User '" << s->username << "' has disconnected." << std::endl;
+
+				sessions_.erase(user_identifier);
 			}
 
 			// Update our view of messages submitted by the client. Bit zero describes
@@ -303,7 +274,7 @@ namespace protocol
 
 			// The peer's last/bitmap describe which server-to-peer messages arrived.
 			// Retransmit only messages in the 64-slot history, oldest first.
-			void process_peer_ack(Session& s, const uint8_t peerLast, const uint64_t peerBitmap) const
+			void process_peer_ack(const Session& s, const uint8_t peerLast, const uint64_t peerBitmap) const
 			{
 				const auto lastSent = static_cast<uint8_t>(s.nextServerMessageId - 1);
 				const auto peerAhead = static_cast<uint8_t>(peerLast - lastSent);
@@ -336,29 +307,35 @@ namespace protocol
 				for (const auto& m : missing) send_message_broadcast(s, m, true);
 			}
 
-			void handle_heartbeat(const BitReader& r, const sockaddr_in& peer)
+			void handle_heartbeat(PacketReader& reader, const sockaddr_in& peer)
 			{
-				uint64_t id = 0, peerLast = 0, peerBitmap = 0;
-				if (r.size_bits() != 88 || !r.get(8, 6, id) || !r.get(14, 8, peerLast) ||
-					!r.get(22, 64, peerBitmap))
+				const auto user_identifier = reader.readSextet();
+				const auto last_message_identifier = reader.readByte();
+				const auto received_messages = reader.readQuadword();
+
+				Session* s = authenticated_session(user_identifier, peer);
+
+				if (s == nullptr)
 					return;
-				Session* s = authenticated_session(static_cast<uint8_t>(id), peer);
-				if (!s) return;
+
 				mark_alive(*s);
-				process_peer_ack(*s, static_cast<uint8_t>(peerLast), peerBitmap);
+				process_peer_ack(*s, last_message_identifier, received_messages);
 				send_receive_status(peer, HEARTBEAT_RECEIVED, *s);
 			}
 
-			void handle_message_request(const BitReader& r, const sockaddr_in& peer)
+			void handle_message_request(PacketReader& reader, const sockaddr_in& peer)
 			{
-				uint64_t id = 0, peerLast = 0, peerBitmap = 0;
-				if (r.size_bits() != 88 || !r.get(8, 6, id) || !r.get(14, 8, peerLast) ||
-					!r.get(22, 64, peerBitmap))
+				const auto user_identifier = reader.readSextet();
+				const auto last_message_identifier = reader.readByte();
+				const auto received_messages = reader.readQuadword();
+
+				Session* s = authenticated_session(user_identifier, peer);
+
+				if (s == nullptr)
 					return;
-				Session* s = authenticated_session(static_cast<uint8_t>(id), peer);
-				if (!s) return;
+
 				mark_alive(*s);
-				process_peer_ack(*s, static_cast<uint8_t>(peerLast), peerBitmap);
+				process_peer_ack(*s, last_message_identifier, received_messages);
 			}
 
 			static void mark_alive(Session& s)
@@ -376,32 +353,37 @@ namespace protocol
 				send_packet(to, writer.getBuffer());
 			}
 
-			void handle_message_submit(const BitReader& r, const sockaddr_in& peer)
+			void handle_message_submit(PacketReader& reader, const sockaddr_in& peer)
 			{
-				uint64_t id = 0, peerLast = 0, peerBitmap = 0, messageId = 0, messageLength = 0;
-				if (!r.get(8, 6, id) || !r.get(14, 8, peerLast) || !r.get(22, 64, peerBitmap) ||
-					!r.get(86, 8, messageId) || !r.get(94, 10, messageLength))
+				const auto user_identifier = reader.readSextet();
+				const auto last_message_identifier = reader.readByte();
+				const auto received_messages = reader.readQuadword();
+				const auto message_identifier = reader.readByte();
+				const auto message_length = reader.readDeclet();
+
+				if (message_length > MAX_MESSAGE)
 					return;
-				if (messageLength == 0 || messageLength > MAX_MESSAGE ||
-					r.size_bits() != padded_bits(104 + messageLength * 8))
-					return;
-				Session* sender = authenticated_session(static_cast<uint8_t>(id), peer);
-				if (!sender) return;
-				std::string message;
-				if (!read_ascii(r, 104, messageLength, message) || !valid_ascii(message))
+
+				const auto message = reader.readString(message_length);
+
+				Session* sender = authenticated_session(user_identifier, peer);
+
+				if (sender == nullptr)
 					return;
 
 				mark_alive(*sender);
-				process_peer_ack(*sender, static_cast<uint8_t>(peerLast), peerBitmap);
-				if (!identify_client_message(*sender, static_cast<uint8_t>(messageId))) return;
+				process_peer_ack(*sender, last_message_identifier, received_messages);
 
-				const std::string username = sender->username;
-				std::cout << username << ": " << message << "\n";
+				if (!identify_client_message(*sender, message_identifier))
+					return;
+
+				std::cout << "User '" << sender->username << "' has sent: '" << message << "'." << std::endl;
+
 				// Each recipient has an independent server-side message counter/history.
 				for (auto& [recipientId, recipient] : sessions_)
 				{
 					(void)recipientId;
-					send_new_broadcast(recipient, username, message);
+					send_new_broadcast(recipient, sender->username, message);
 				}
 			}
 
@@ -476,7 +458,7 @@ namespace protocol
 
 			send_packet(recipient.address, writer.getBuffer());
 		}
-	};
+	}
 } // namespace protocol
 
 int main(const int argc, char** argv)
