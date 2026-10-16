@@ -11,8 +11,8 @@
 //! * [`SendHistory`] – the last 64 messages *it* sent, so that it can
 //!   retransmit the ones the peer reports as missing.
 
+use crate::models::message::Message;
 use crate::models::message_history::MessageHistory;
-use crate::network::packet::MessageText;
 
 /// Size of the circular retransmission history.
 pub const HISTORY_SIZE: usize = 64;
@@ -23,16 +23,28 @@ pub enum Arrival {
     /// Newer than anything seen. `distance` is `(id - last) % 256`; a value
     /// above 1 means messages were skipped and should be requested.
     New { distance: u8 },
+
     /// Older than `last` but not received before: fills a hole.
     Late,
+
     /// Already received, or too old to be tracked: must be ignored.
     Ignored,
+}
+
+impl Arrival {
+    /// Checks if a message is missing
+    pub fn is_message_missing(&self) -> bool {
+        match self {
+            Arrival::New { distance } => *distance > 1,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 struct Sent {
     id: u8,
-    text: MessageText,
+    message: Message,
 }
 
 /// The last [`HISTORY_SIZE`] messages sent, indexed by `id % 64`.
@@ -61,9 +73,9 @@ impl SendHistory {
     /// Stores `text` under the current counter value, advances the counter
     /// (wrapping) and returns the identifier to put in the packet. Must be
     /// called *before* the first emission.
-    pub fn record(&mut self, text: MessageText) -> u8 {
+    pub fn record(&mut self, message: Message) -> u8 {
         let id = self.next_id;
-        self.slots[usize::from(id) % HISTORY_SIZE] = Some(Sent { id, text });
+        self.slots[usize::from(id) % HISTORY_SIZE] = Some(Sent { id, message: message });
         self.next_id = id.wrapping_add(1);
         self.sent = self.sent.saturating_add(1);
         id
@@ -74,11 +86,11 @@ impl SendHistory {
         (self.sent > 0).then(|| self.next_id.wrapping_sub(1))
     }
 
-    fn get(&self, id: u8) -> Option<&MessageText> {
+    fn get(&self, id: u8) -> Option<&Message> {
         self.slots[usize::from(id) % HISTORY_SIZE]
             .as_ref()
             .filter(|s| s.id == id)
-            .map(|s| &s.text)
+            .map(|s| &s.message)
     }
 
     /// True when the peer claims to have received a message newer than the
@@ -96,10 +108,11 @@ impl SendHistory {
     /// A message is missing if its bit is `0`, or if it is newer than the
     /// reported `last` and was already sent. Only the last 64 messages sent
     /// can be retransmitted; older ones are lost for good.
-    pub fn missing(&self, history: MessageHistory) -> Vec<(u8, &MessageText)> {
+    pub fn missing(&self, history: MessageHistory) -> Vec<(u8, &Message)> {
         let Some(last_sent) = self.last_sent() else {
             return Vec::new();
         };
+
         if self.is_history_ahead(history) {
             return Vec::new();
         }

@@ -22,10 +22,11 @@ use crate::application::constants::{
     SERVER_INACTIVITY_TIMEOUT,
 };
 use crate::application::events::event::UserEvent;
+use crate::log_debug;
+use crate::models::message::Message;
 use crate::models::message_history::MessageHistory;
 use crate::models::username::Username;
-use crate::network::other::{Liveness, NotOnline, Session, State};
-use crate::network::packet::MessageText;
+use crate::network::other::{Liveness, Session, State};
 use crate::network::packets::connection_accepted::ConnectionAcceptedPacket;
 use crate::network::packets::connection_closed::ConnectionClosedPacket;
 use crate::network::packets::connection_request::ConnectionRequestPacket;
@@ -88,14 +89,17 @@ impl Client {
 
     /// True while some message we sent is not yet known to have arrived.
     pub fn has_unacknowledged(&self) -> bool {
-        !self.client_history.missing(self.latest_server_history).is_empty()
+        !self
+            .client_history
+            .missing(self.latest_server_history)
+            .is_empty()
     }
 
     // ---- user actions ------------------------------------------------------
 
     /// Offline -> Connecting: sends `CONNECTION_REQUEST`.
     pub fn connect(&mut self) {
-        if !matches!(self.state, State::Offline) {
+        if !self.is_offline() {
             panic!("Client cannot connect without being offline.")
         }
 
@@ -111,20 +115,25 @@ impl Client {
     }
 
     /// Sends and caches a `MESSAGE_SUBMIT`.
-    pub fn send_message(&mut self, text: MessageText) -> Result<(), NotOnline> {
+    pub fn send_message(&mut self, message: Message) {
+        if !self.is_online() {
+            panic!("Client cannot send a message without being online.")
+        }
+
         let State::Online(session) = self.state else {
-            return Err(NotOnline);
+            panic!();
         };
+
         // The history is updated before the first emission.
-        let message_id = self.client_history.record(text.clone());
+        let message_id = self.client_history.record(message.clone());
         let packet = MessageSubmitPacket {
             user_identifier: session.user_id,
             message_history: self.server_history,
             message_identifier: message_id,
-            message: text.to_string(),
+            message,
         };
+
         self.transmit(&packet);
-        Ok(())
     }
 
     /// Online -> Offline: sends `CONNECTION_CLOSED`. While connecting it
@@ -149,6 +158,7 @@ impl Client {
         let Ok(packet) = decode_packet(datagram) else {
             return;
         };
+
         match self.state {
             State::Offline => {}
             State::Connecting { .. } => self.on_connecting(packet),
@@ -156,6 +166,7 @@ impl Client {
         }
     }
 
+    /// Handles incoming packets for a connecting client
     fn on_connecting(&mut self, packet: NetworkPacket) {
         match packet {
             NetworkPacket::ConnectionAccepted(ConnectionAcceptedPacket { user_identifier }) => {
@@ -177,10 +188,9 @@ impl Client {
 
     fn on_online(&mut self, packet: NetworkPacket) {
         match packet {
-            // Only the reserved identifier 0 (server shutdown) ends the
-            // session; any other value is ignored (RFC "Termination").
-            NetworkPacket::ConnectionClosed(ConnectionClosedPacket { user_identifier }) => {
-                if user_identifier != 0b000000 {
+            NetworkPacket::ConnectionClosed(connection_closed_packet) => {
+                if !connection_closed_packet.is_from_server() {
+                    log_debug!("Received connection termination from other source. Ignoring.");
                     return;
                 }
 
@@ -194,11 +204,11 @@ impl Client {
                 message,
             }) => {
                 let arrival = self.server_history.mark_as_found(message_identifier);
-                if let Arrival::New { distance } = arrival {
-                    if distance > 1 {
-                        self.request_missing();
-                    }
+
+                if arrival.is_message_missing() {
+                    self.request_missing();
                 }
+
                 // Duplicates carry fresh reports too.
                 self.process_report(message_history);
                 if arrival != Arrival::Ignored {
@@ -233,19 +243,22 @@ impl Client {
         if self.client_history.is_history_ahead(history) {
             return; // RFC: the fields MUST be ignored.
         }
+
         self.latest_server_history = history;
-        let State::Online(session) = self.state else {
+
+        let State::Online(session): State = self.state else {
             return;
         };
+
         let resend: Vec<MessageSubmitPacket> = self
             .client_history
             .missing(history)
             .into_iter()
-            .map(|(message_id, text)| MessageSubmitPacket {
+            .map(|(message_id, message)| MessageSubmitPacket {
                 user_identifier: session.user_id,
                 message_history: self.server_history,
                 message_identifier: message_id,
-                message: text.clone().to_string(),
+                message: message.clone(),
             })
             .collect();
         for packet in &resend {
@@ -374,24 +387,31 @@ impl Client {
             client_identifier: self.client_id,
             username: self.username.clone(),
         };
+
         self.outbox.push_back(encode_packet(&packet));
     }
 
     fn send_heartbeat(&mut self) {
-        if let Some(user_id) = self.user_id() {
-            self.transmit(&HeartbeatBroadcastPacket {
-                user_identifier: user_id,
-                message_history: self.server_history,
-            });
+        match self.user_id() {
+            Some(user_id) => {
+                self.transmit(&HeartbeatBroadcastPacket {
+                    user_identifier: user_id,
+                    message_history: self.server_history,
+                });
+            }
+            None => {}
         }
     }
 
     fn request_missing(&mut self) {
-        if let Some(user_id) = self.user_id() {
-            self.transmit(&MessageRequestPacket {
-                user_identifier: user_id,
-                message_history: self.server_history,
-            });
+        match self.user_id() {
+            Some(user_id) => {
+                self.transmit(&MessageRequestPacket {
+                    user_identifier: user_id,
+                    message_history: self.server_history,
+                });
+            }
+            None => {}
         }
     }
 

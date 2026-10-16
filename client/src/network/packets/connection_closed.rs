@@ -1,5 +1,6 @@
 use crate::network::other::Session;
 use crate::network::packet::FieldError;
+use crate::network::packets::constants::SERVER_OWNED_USER_IDENTIFIER;
 use crate::network::packets::packet::Packet;
 use crate::network::serialization::packet_reader::PacketReader;
 use crate::network::serialization::packet_writer::PacketWriter;
@@ -8,6 +9,7 @@ use crate::network::serialization::packet_writer::PacketWriter;
 pub struct ConnectionClosedPacket {
     pub user_identifier: u8,
 }
+
 impl Packet for ConnectionClosedPacket {
     const MAGIC: u8 = super::types::CONNECTION_CLOSED;
 
@@ -34,5 +36,10 @@ impl ConnectionClosedPacket {
         Self {
             user_identifier: session.user_id,
         }
+    }
+    
+    /// Checks if the connection closed comes from the server
+    pub fn is_from_server(&self) -> bool {
+        self.user_identifier == SERVER_OWNED_USER_IDENTIFIER
     }
 }

@@ -22,9 +22,9 @@ use crate::application::arguments::Arguments;
 use crate::application::events::event::UserEvent;
 use crate::application::logger;
 use crate::application::logger::Level;
+use crate::models::message::Message;
 use crate::models::username::Username;
-use crate::network::client::Client;
-use crate::network::packet::{MAX_MESSAGE_LEN, MessageText};
+use crate::network::client::client::Client;
 use crate::network::packets::packet::decode_packet;
 
 const USAGE: &str = "\
@@ -110,7 +110,7 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
     client.connect();
 
     let mut exit_code = 0;
-    let mut typed_before_online: VecDeque<MessageText> = VecDeque::new();
+    let mut typed_before_online: VecDeque<Message> = VecDeque::new();
     let mut input_closed = false;
     let mut drain_deadline: Option<Instant> = None;
 
@@ -119,10 +119,10 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
 
         // Lines typed while the connection was still being established.
         while client.is_online() {
-            let Some(text) = typed_before_online.pop_front() else {
+            let Some(message) = typed_before_online.pop_front() else {
                 break;
             };
-            let _ = client.send_message(text);
+            let _ = client.send_message(message);
         }
 
         while let Some(event) = client.poll_event() {
@@ -166,13 +166,9 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
                 if line == "/quit" {
                     client.disconnect();
                 } else if !line.is_empty() {
-                    match MessageText::new(line) {
-                        Ok(text) => typed_before_online.push_back(text),
-                        Err(e) => {
-                            log_error!(
-                                "! message not sent: it {e} (1-{MAX_MESSAGE_LEN} characters)"
-                            )
-                        }
+                    match Message::from_string(line) {
+                        Ok(message) => typed_before_online.push_back(message),
+                        Err(e) => log_error!("Failed to send the message: {e}"),
                     }
                 }
             }

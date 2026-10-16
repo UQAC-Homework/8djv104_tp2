@@ -1,6 +1,5 @@
 use crate::time::repeater::Repeater;
 use crate::time::timeout::Timeout;
-use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisconnectReason {
@@ -11,18 +10,6 @@ pub enum DisconnectReason {
     /// `SERVER_INACTIVITY_TIMEOUT` expired without an answer to heartbeats.
     ServerUnreachable,
 }
-
-/// Returned by [`Client::send_message`] when there is no session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NotOnline;
-
-impl fmt::Display for NotOnline {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "not connected to a server")
-    }
-}
-
-impl std::error::Error for NotOnline {}
 
 #[derive(Debug, Clone)]
 pub enum State {

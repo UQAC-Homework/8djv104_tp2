@@ -9,9 +9,6 @@
 
 use std::fmt;
 
-/// Longest message, in bytes (RFC: `Message Length` MUST NOT exceed 990).
-pub const MAX_MESSAGE_LEN: usize = 990;
-
 // ---------------------------------------------------------------------------
 // Validated field types
 // ---------------------------------------------------------------------------
@@ -35,33 +32,3 @@ impl fmt::Display for FieldError {
 }
 
 impl std::error::Error for FieldError {}
-
-pub(crate) fn check_text(s: &str, max: usize) -> Result<(), FieldError> {
-    if s.is_empty() {
-        Err(FieldError::Empty)
-    } else if !s.is_ascii() {
-        Err(FieldError::NotAscii)
-    } else if s.len() > max {
-        Err(FieldError::TooLong { max })
-    } else {
-        Ok(())
-    }
-}
-
-/// A chat message: 1 to 990 ASCII characters.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MessageText(String);
-
-impl MessageText {
-    pub fn new(text: impl Into<String>) -> Result<Self, FieldError> {
-        let text = text.into();
-        check_text(&text, MAX_MESSAGE_LEN)?;
-        Ok(Self(text))
-    }
-}
-
-impl fmt::Display for MessageText {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}

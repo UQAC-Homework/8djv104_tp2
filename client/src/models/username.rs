@@ -1,8 +1,8 @@
 use crate::network::packet::FieldError;
 use std::fmt;
 
-/// Longest username, in bytes
-const MAX_USERNAME_LEN: usize = 16;
+/// Maximum length of a username in bytes
+const USERNAME_MAX_LENGTH: usize = 16;
 
 /// Structure used to define the name of a user
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,9 +22,9 @@ impl Username {
             return Err(FieldError::NotAscii);
         }
 
-        if name.len() > MAX_USERNAME_LEN {
+        if name.len() > USERNAME_MAX_LENGTH {
             return Err(FieldError::TooLong {
-                max: MAX_USERNAME_LEN,
+                max: USERNAME_MAX_LENGTH,
             });
         }
 
