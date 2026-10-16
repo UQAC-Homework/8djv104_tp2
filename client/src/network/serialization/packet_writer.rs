@@ -34,26 +34,46 @@ impl PacketWriter {
 
     /// Writes the given nybble
     pub fn write_nybble(&mut self, value: u8) {
+        if !self.can_write(4) {
+            panic!("Cannot write a nybble to the buffer.");
+        }
+
         write_variable_u8(&mut self.buffer, &mut self.offset, value & 0b1111, 4);
     }
 
     /// Writes the given 6 bits
     pub fn write_sextet(&mut self, value: u8) {
+        if !self.can_write(6) {
+            panic!("Cannot write a sextet to the buffer.");
+        }
+
         write_variable_u8(&mut self.buffer, &mut self.offset, value & 0b111111, 6);
     }
 
     /// Writes the given byte
     pub fn write_byte(&mut self, value: u8) {
+        if !self.can_write(8) {
+            panic!("Cannot write a byte to the buffer.");
+        }
+
         write_variable_u8(&mut self.buffer, &mut self.offset, value, 8);
     }
 
     /// Writes the given 10 bits
     pub fn write_declet(&mut self, value: u16) {
+        if !self.can_write(10) {
+            panic!("Cannot write a declet to the buffer.");
+        }
+
         write_variable_u16(&mut self.buffer, &mut self.offset, value, 10);
     }
 
     /// Writes the given quadword
     pub fn write_quadword(&mut self, value: u64) {
+        if !self.can_write(64) {
+            panic!("Cannot write a quadword to the buffer.");
+        }
+
         todo!()
     }
 
