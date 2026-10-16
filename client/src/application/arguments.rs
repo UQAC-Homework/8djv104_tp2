@@ -1,7 +1,10 @@
 /// Structure used to store the arguments of the application
 pub struct Arguments {
     /// Network address of the server
-    pub server_address: String,
+    pub server_ip: String,
+
+    /// Network port of the server
+    pub server_port: u16,
 
     /// Username of the user
     pub username: String,
@@ -11,10 +14,9 @@ pub struct Arguments {
 }
 
 // TODO: Add default values
-// TODO: Reorder arguments
 
 impl Arguments {
-    pub fn new<I>(args: I) -> Result<Self, String>
+    pub fn new<I>(args: I) -> Result<Self, Option<String>>
     where
         I: Iterator<Item = String>,
     {
@@ -24,21 +26,45 @@ impl Arguments {
         for arg in args {
             match arg.as_str() {
                 "-v" | "--verbose" => verbose = true,
-                "-h" | "--help" => return Err(String::new()),
-                _ if arg.starts_with('-') && arg.len() > 1 => {
-                    return Err(format!("unknown option `{arg}`"));
+                "-h" | "--help" => return Err(None),
+                _ => {
+                    if arg.starts_with('-') && arg.len() > 1 {
+                        return Err(Some(format!("Unknown option: `{arg}`")));
+                    }
+
+                    positional.push(arg)
                 }
-                _ => positional.push(arg),
             }
         }
 
-        match <[String; 2]>::try_from(positional) {
-            Ok([server, username]) => Ok(Arguments {
-                server_address: server,
-                username,
-                verbose,
-            }),
-            Err(_) => Err("expected a server address and a username".to_string()),
+        let mut username = "Player";
+        let mut server_address = "127.0.0.1";
+        let mut server_port: u16 = 9999;
+
+        if positional.len() > 0 {
+            username = positional.get(0).unwrap();
         }
+
+        if positional.len() > 1 {
+            server_address = positional.get(1).unwrap();
+        }
+
+        if positional.len() > 2 {
+            let raw_port = positional.get(2).unwrap();
+            let port_conversion = raw_port.parse::<u16>();
+
+            if port_conversion.is_err() {
+                return Err(Some(format!("Invalid port number: {}", raw_port)));
+            }
+
+            server_port = port_conversion.unwrap();
+        }
+
+        Ok(Arguments {
+            server_ip: server_address.parse().unwrap(),
+            server_port,
+            username: username.parse().unwrap(),
+            verbose,
+        })
     }
 }

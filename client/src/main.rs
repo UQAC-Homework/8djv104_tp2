@@ -8,7 +8,7 @@ use network::other::DisconnectReason;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::io::{self, BufRead, Write};
-use std::net::{ToSocketAddrs, UdpSocket};
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -28,15 +28,15 @@ use crate::network::client::client::Client;
 use crate::network::packets::packet::decode_packet;
 
 const USAGE: &str = "\
-Usage: udp-chat-client [--verbose] <server:port> <username>
+Usage: client <username> <server_ip> <server_port> [--loss P] [--verbose]
 
-  <server:port>  address of the chat server, e.g. 127.0.0.1:9000
-  <username>     1-16 ASCII characters
-  -v, --verbose  log every packet sent and received to stderr
+    <username>   : Name of the user to connect as
+    <server_ip>  : IP address to connect to
+    <server_port>: Port number to connect to
 
-Type a line and press Enter to send it. `/quit` (or end of input) leaves the
-chat. When input ends, the client first waits (up to 3 s) until the server has
-acknowledged everything that was sent.";
+    [loss]   : Chance that the client voluntarily loses a packet
+    [verbose]: Enable the logging of network packets 
+";
 
 /// How long to wait for outstanding acknowledgements after end of input.
 const DRAIN_LIMIT: Duration = Duration::from_secs(3);
@@ -49,53 +49,57 @@ enum Input {
     SocketError(io::Error),
 }
 
-fn main() {
-    let args = match Arguments::new(std::env::args().skip(1)) {
+fn main() -> Result<(), Box<dyn Error>> {
+    let arguments = match Arguments::new(std::env::args().skip(1)) {
         Ok(args) => args,
         Err(msg) => {
-            if !msg.is_empty() {
-                log_error!("error: {msg}\n");
+            if msg.is_some() {
+                log_error!("Error while parsing arguments: {}\n", msg.unwrap());
+                std::process::exit(1);
             }
+
             log_error!("{USAGE}");
             std::process::exit(2);
         }
     };
 
-    match run(args) {
-        Ok(code) => std::process::exit(code),
-        Err(e) => {
-            log_error!("error: {e}");
-            std::process::exit(2);
-        }
-    }
-}
-
-fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
     if arguments.verbose {
         logger::set_level(Level::Debug);
     }
 
     let username =
-        Username::new(arguments.username).map_err(|e| format!("invalid username: it {e}"))?;
-    let server = arguments
-        .server_address
+        Username::new(arguments.username).map_err(|e| format!("Invalid username: {e}"))?;
+
+    let full_address = format!("{}:{}", arguments.server_ip, arguments.server_port);
+    let server = full_address
         .to_socket_addrs()
         .map_err(|e| {
             format!(
-                "cannot use `{}` as a server address ({e}); expected host:port",
-                arguments.server_address
+                "Cannot use `{}` as a server address ({e}); expected host:port",
+                full_address
             )
         })?
         .next()
         .ok_or("could not resolve the server address")?;
 
-    let socket = UdpSocket::bind(if server.is_ipv4() {
-        "0.0.0.0:0"
-    } else {
-        "[::]:0"
-    })?;
+    match run(username, server) {
+        Ok(code) => std::process::exit(code),
+        Err(e) => {
+            log_error!("Error while running the client: {e}");
+            std::process::exit(2);
+        }
+    }
+}
+
+fn run(username: Username, address: SocketAddr) -> Result<i32, Box<dyn Error>> {
+    let bind_address = match address.is_ipv4() {
+        true => "0.0.0.0:0",
+        false => "[::]:0",
+    };
+
+    let socket = UdpSocket::bind(bind_address)?;
     // A connected UDP socket only receives datagrams from the server.
-    socket.connect(server)?;
+    socket.connect(address)?;
 
     let (tx, rx) = mpsc::channel();
     spawn_socket_reader(socket.try_clone()?, tx.clone());
@@ -104,7 +108,8 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
     let client_identifier = random_client_id();
     let mut client = Client::new(username, client_identifier);
     log_info!(
-        "* connecting to {server} (client id {:#x})...",
+        "* connecting to {} (client id {:#x})...",
+        address,
         client_identifier
     );
     client.connect();
@@ -126,8 +131,11 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
         }
 
         while let Some(event) = client.poll_event() {
-            if let Some(code) = show(&event)? {
-                exit_code = code;
+            match show(&event)? {
+                Some(code) => {
+                    exit_code = code;
+                }
+                None => {}
             }
         }
         flush_transmits(&mut client, &socket)?;
@@ -138,6 +146,7 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
         // End of input: leave once the server has everything we sent.
         if input_closed && client.is_online() && typed_before_online.is_empty() {
             let deadline = *drain_deadline.get_or_insert(now + DRAIN_LIMIT);
+
             if !client.has_unacknowledged() || now >= deadline {
                 client.disconnect();
                 continue;
@@ -145,9 +154,14 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
         }
 
         let mut wake = client.poll_timeout();
-        if let Some(deadline) = drain_deadline {
-            wake = Some(wake.map_or(deadline, |w| w.min(deadline)));
+
+        match drain_deadline {
+            Some(deadline) => {
+                wake = Some(wake.map_or(deadline, |w| w.min(deadline)));
+            }
+            None => {}
         }
+
         let input = match wake {
             Some(at) => rx.recv_timeout(at.saturating_duration_since(Instant::now())),
             None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
@@ -159,7 +173,12 @@ fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
                     Ok(packet) => log_debug!("<- {packet:?}"),
                     Err(e) => log_debug!("<- discarded: {e}"),
                 }
-                client.handle_packet(&data);
+
+                if rand::random_range(0..100) <= 50 {
+                    log_debug!("Packet dropped!");
+                } else {
+                    client.handle_packet(&data);
+                }
             }
             Ok(Input::Line(line)) => {
                 let line = line.trim_end_matches('\r');
@@ -234,9 +253,7 @@ fn spawn_socket_reader(socket: UdpSocket, tx: Sender<Input>) {
         loop {
             match socket.recv(&mut buf) {
                 Ok(n) => {
-                    if tx.send(Input::Datagram(buf[..n].to_vec())).is_err() {
-                        return;
-                    }
+                    let _ = tx.send(Input::Datagram(buf[..n].to_vec()));
                 }
                 Err(e) if e.kind() == io::ErrorKind::ConnectionRefused => continue,
                 Err(e) => {
@@ -253,9 +270,7 @@ fn spawn_stdin_reader(tx: Sender<Input>) {
         for line in io::stdin().lock().lines() {
             match line {
                 Ok(line) => {
-                    if tx.send(Input::Line(line)).is_err() {
-                        return;
-                    }
+                    let _ = tx.send(Input::Line(line));
                 }
                 Err(e) if e.kind() == io::ErrorKind::InvalidData => {
                     log_error!("! line skipped: input is not valid text");
