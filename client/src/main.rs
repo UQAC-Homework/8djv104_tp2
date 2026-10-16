@@ -4,6 +4,7 @@
 //! between the UDP socket, the terminal and [`Client`], and sleeps until the
 //! client's next timer.
 
+use network::other::{DisconnectReason, Event};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::io::{self, BufRead, Write};
@@ -15,9 +16,9 @@ use std::time::{Duration, Instant};
 mod network;
 mod application;
 
-use crate::network::client::{Client, Config, DisconnectReason, Event, Timings};
-use crate::network::packet::{MAX_MESSAGE_LEN, MessageText, Packet, Username};
 use crate::application::arguments::Arguments;
+use crate::network::client::Client;
+use crate::network::packet::{MAX_MESSAGE_LEN, MessageText, Packet, Username};
 
 const USAGE: &str = "\
 Usage: udp-chat-client [--verbose] <server:port> <username>
@@ -88,10 +89,7 @@ fn run() -> Result<i32, Box<dyn Error>> {
     spawn_stdin_reader(tx);
 
     let verbose = args.verbose;
-    let mut client = Client::new(Config {
-        username,
-        timings: Timings::default(),
-    });
+    let mut client = Client::new(username);
     eprintln!(
         "* connecting to {server} (client id {:#x})...",
         client.client_id()

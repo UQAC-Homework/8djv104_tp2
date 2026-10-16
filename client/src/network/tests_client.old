@@ -1,0 +1,547 @@
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use crate::network::client::{Client, Config, DisconnectReason, Event, NotOnline, Timings};
+    use crate::network::packet::{MessageText, MissingMessages, Packet, Username};
+    use crate::network::packets::connection_accepted::ConnectionAcceptedPacket;
+    use crate::network::packets::connection_closed::ConnectionClosedPacket;
+    use crate::network::packets::connection_rejected::ConnectionRejectedPacket;
+    use crate::network::packets::connection_request::ConnectionRequestPacket;
+    use crate::network::packets::heartbeat_broadcast::HeartbeatBroadcastPacket;
+    use crate::network::packets::heartbeat_received::HeartbeatReceivedPacket;
+    use crate::network::packets::heartbeat_request::HeartbeatRequestPacket;
+    use crate::network::packets::message_broadcast::MessageBroadcastPacket;
+    use crate::network::packets::message_submit::MessageSubmitPacket;
+    use crate::network::packets::packet::Packet as Packet2;
+    use crate::network::serialization::packet_writer::PacketWriter;
+    use std::time::{Duration, Instant};
+
+    const ALICE_ID: u8 = 5;
+
+    fn ms(n: u64) -> Duration {
+        Duration::from_millis(n)
+    }
+
+    fn new_client() -> Client {
+        Client::with_client_id(
+            Config {
+                username: Username::new("alice").unwrap(),
+                timings: Timings::default(),
+            },
+            3,
+        )
+    }
+
+    fn sent(c: &mut Client) -> Vec<impl Packet2> {
+        std::iter::from_fn(|| c.poll_transmit())
+            .map(|bytes| MessageSubmitPacket {
+                user_identifier: 0,
+                last_message_identifier: 0,
+                received_messages: 0,
+                message_identifier: 0,
+                message: "".to_string(),
+            })
+            //.map(|bytes| Packet::decode(&bytes).expect("client sent a valid packet"))
+            .collect()
+    }
+
+    fn events(c: &mut Client) -> Vec<Event> {
+        std::iter::from_fn(|| c.poll_event()).collect()
+    }
+
+    fn feed<P: Packet2>(c: &mut Client, now: Instant, packet: P) {
+        let mut writer = PacketWriter::new();
+
+        packet.serialize(&mut writer);
+
+        c.handle_packet(now, &writer.buffer());
+    }
+
+    /// A client that is online (user id 5), with its queues drained.
+    fn online(t0: Instant) -> Client {
+        let mut c = new_client();
+        c.connect(t0);
+        feed(
+            &mut c,
+            t0,
+            ConnectionAcceptedPacket {
+                user_identifier: ALICE_ID,
+            },
+        );
+        sent(&mut c);
+        assert_eq!(events(&mut c), vec![Event::Connected { user_id: ALICE_ID }]);
+        c
+    }
+
+    fn broadcast(id: u8, last: u8, text: &str) -> impl Packet2 {
+        MessageBroadcastPacket {
+            message_identifier: id,
+            last_message_identifier: last,
+            received_messages: u64::MAX,
+            username: "bob".into(),
+            message: text.into(),
+        }
+    }
+
+    fn submits(packets: &[Packet]) -> Vec<(u8, String)> {
+        packets
+            .iter()
+            .filter_map(|p| match p {
+                Packet::MessageSubmit {
+                    message_id,
+                    message,
+                    ..
+                } => Some((*message_id, message.to_string())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    // ---- connection --------------------------------------------------------
+
+    #[test]
+    fn connect_sends_request_with_client_id_and_username() {
+        let t0 = Instant::now();
+        let mut c = new_client();
+        c.connect(t0);
+        assert_eq!(
+            sent(&mut c),
+            vec![ConnectionRequestPacket {
+                client_identifier: 3,
+                username: "alice".parse().unwrap(),
+            }]
+        );
+    }
+
+    #[test]
+    fn connection_request_is_retried_then_abandoned() {
+        let t0 = Instant::now();
+        let mut c = new_client();
+        c.connect(t0);
+        sent(&mut c);
+
+        c.handle_timeout(t0 + ms(500));
+        assert!(sent(&mut c).is_empty());
+        assert_eq!(c.poll_timeout(), Some(t0 + ms(1000)));
+
+        for s in 1..=9 {
+            c.handle_timeout(t0 + ms(1000 * s));
+            let out = sent(&mut c);
+            assert_eq!(out.len(), 1, "retry at {s}s");
+            assert!(matches!(
+                out[0],
+                ConnectionRequestPacket {
+                    client_identifier: 3,
+                    ..
+                }
+            ));
+        }
+        c.handle_timeout(t0 + ms(10_000));
+        assert!(sent(&mut c).is_empty());
+        assert_eq!(events(&mut c), vec![Event::ConnectFailed]);
+        assert!(c.is_offline());
+    }
+
+    #[test]
+    fn rejected_connection_goes_offline() {
+        let t0 = Instant::now();
+        let mut c = new_client();
+        c.connect(t0);
+        feed(&mut c, t0, ConnectionRejectedPacket {});
+        assert_eq!(events(&mut c), vec![Event::Rejected]);
+        assert!(c.is_offline());
+    }
+
+    #[test]
+    fn accepted_connection_goes_online() {
+        let t0 = Instant::now();
+        let c = online(t0);
+        assert!(c.is_online());
+        assert_eq!(c.poll_timeout(), Some(t0 + ms(1000)));
+    }
+
+    // ---- heartbeat ---------------------------------------------------------
+
+    #[test]
+    fn idle_client_heartbeats_and_returns_to_idle_on_answer() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+
+        c.handle_timeout(t0 + ms(999));
+        assert!(sent(&mut c).is_empty());
+
+        c.handle_timeout(t0 + ms(1000));
+        assert_eq!(
+            sent(&mut c),
+            vec![HeartbeatBroadcastPacket {
+                user_identifier: ALICE_ID,
+                last_message_identifier: MissingMessages::INITIAL.last
+                received_messages: MissingMessages::INITIAL.received
+            }]
+        );
+        assert_eq!(c.poll_timeout(), Some(t0 + ms(1200)));
+
+        feed(
+            &mut c,
+            t0 + ms(1050),
+            HeartbeatReceivedPacket {
+                last_message_identifier: MissingMessages::INITIAL.last,
+                received_messages: MissingMessages::INITIAL.received,
+            },
+        );
+        assert!(sent(&mut c).is_empty());
+        // Back to Online: INACTIVITY_WARNING restarted, no more heartbeats
+        // until it expires again.
+        assert_eq!(c.poll_timeout(), Some(t0 + ms(2050)));
+        c.handle_timeout(t0 + ms(1500));
+        assert!(sent(&mut c).is_empty());
+    }
+
+    #[test]
+    fn unanswered_heartbeats_repeat_then_connection_is_closed() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        c.handle_timeout(t0 + ms(1000));
+        sent(&mut c);
+
+        // Heartbeats every 200 ms during the 3 s the server has to answer.
+        let mut heartbeats = 0;
+        for step in 1..15 {
+            c.handle_timeout(t0 + ms(1000 + 200 * step));
+            heartbeats += sent(&mut c)
+                .iter()
+                .filter(|p| matches!(p, HeartbeatBroadcastPacket { .. }))
+                .count();
+        }
+        assert_eq!(heartbeats, 14);
+        assert!(c.is_online());
+
+        c.handle_timeout(t0 + ms(4000));
+        assert_eq!(
+            sent(&mut c),
+            vec![Packet::ConnectionClosed { user_id: ALICE_ID }]
+        );
+        assert_eq!(
+            events(&mut c),
+            vec![Event::Disconnected(DisconnectReason::ServerUnreachable)]
+        );
+        assert!(c.is_offline());
+    }
+
+    #[test]
+    fn heartbeat_request_is_answered() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        feed(
+            &mut c,
+            t0 + ms(300),
+            HeartbeatRequestPacket {
+                last_message_identifier: MissingMessages::INITIAL.last,
+                received_messages: MissingMessages::INITIAL.received,
+            },
+        );
+        assert_eq!(
+            sent(&mut c),
+            vec![HeartbeatBroadcastPacket {
+                user_identifier: ALICE_ID,
+                last_message_identifier: MissingMessages::INITIAL.last,
+                received_messages: MissingMessages::INITIAL.received,
+            }]
+        );
+        // The send restarted the idle timer.
+        assert_eq!(c.poll_timeout(), Some(t0 + ms(1300)));
+    }
+
+    #[test]
+    fn sending_restarts_the_idle_timer_but_not_the_wait() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        c.send_message(t0 + ms(800), MessageText::new("hi").unwrap())
+            .unwrap();
+        assert_eq!(c.poll_timeout(), Some(t0 + ms(1800)));
+        sent(&mut c);
+
+        c.handle_timeout(t0 + ms(1800));
+        sent(&mut c);
+        let before = c.poll_timeout();
+        c.send_message(t0 + ms(1850), MessageText::new("again").unwrap())
+            .unwrap();
+        // Waiting: the heartbeat schedule is untouched by sending.
+        assert_eq!(c.poll_timeout(), before);
+    }
+
+    // ---- data transfer -----------------------------------------------------
+
+    #[test]
+    fn submitted_messages_carry_user_id_counter_and_report() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        c.send_message(t0, MessageText::new("Hello World!").unwrap())
+            .unwrap();
+        c.send_message(t0, MessageText::new("second").unwrap())
+            .unwrap();
+        assert_eq!(
+            sent(&mut c),
+            vec![
+                Packet::MessageSubmit {
+                    user_id: ALICE_ID,
+                    report: MissingMessages::INITIAL,
+                    message_id: 0,
+                    message: MessageText::new("Hello World!").unwrap()
+                },
+                Packet::MessageSubmit {
+                    user_id: ALICE_ID,
+                    report: MissingMessages::INITIAL,
+                    message_id: 1,
+                    message: MessageText::new("second").unwrap()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn cannot_send_while_offline() {
+        let mut c = new_client();
+        assert_eq!(
+            c.send_message(Instant::now(), MessageText::new("x").unwrap()),
+            Err(NotOnline)
+        );
+    }
+
+    #[test]
+    fn broadcasts_are_displayed_immediately_and_in_arrival_order() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        feed(&mut c, t0, broadcast(0, 0xFF, "one"));
+        feed(&mut c, t0, broadcast(1, 0xFF, "two"));
+        assert_eq!(
+            events(&mut c),
+            vec![
+                Event::Message {
+                    sender: "bob".into(),
+                    text: "one".into(),
+                    late: false
+                },
+                Event::Message {
+                    sender: "bob".into(),
+                    text: "two".into(),
+                    late: false
+                },
+            ]
+        );
+        assert!(sent(&mut c).is_empty());
+    }
+
+    #[test]
+    fn rfc_example_hole_is_requested_and_filled_late() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        for id in 0..=4 {
+            feed(&mut c, t0, broadcast(id, 0xFF, "m"));
+        }
+        events(&mut c);
+        sent(&mut c);
+
+        // Message 5 is lost; 6 reveals the hole.
+        feed(&mut c, t0, broadcast(6, 0xFF, "six"));
+        assert_eq!(events(&mut c).len(), 1, "6 is displayed without waiting");
+        let out = sent(&mut c);
+        assert_eq!(out.len(), 1);
+        let Packet::MessageRequest { user_id, report } = &out[0] else {
+            panic!("expected MESSAGE_REQUEST, got {:?}", out[0]);
+        };
+        assert_eq!(*user_id, ALICE_ID);
+        assert_eq!(report.last, 6);
+        assert_eq!(report.received & 1, 0, "bit 0 = message 5 is missing");
+        assert_eq!(report.received & 2, 2, "bit 1 = message 4 is present");
+
+        // The retransmission arrives and is displayed as late.
+        feed(&mut c, t0, broadcast(5, 0xFF, "five"));
+        assert_eq!(
+            events(&mut c),
+            vec![Event::Message {
+                sender: "bob".into(),
+                text: "five".into(),
+                late: true
+            }]
+        );
+        // A duplicate is not displayed again.
+        feed(&mut c, t0, broadcast(5, 0xFF, "five"));
+        assert!(events(&mut c).is_empty());
+        assert!(sent(&mut c).is_empty());
+    }
+
+    #[test]
+    fn rfc_example_lost_last_message_is_recovered_by_heartbeat() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        // Server has everything up to message 6; the client sends 0..=7 and
+        // message 7 is lost.
+        for i in 0..=7 {
+            c.send_message(t0, MessageText::new(format!("m{i}")).unwrap())
+                .unwrap();
+        }
+        sent(&mut c);
+
+        c.handle_timeout(t0 + ms(1000));
+        assert!(matches!(sent(&mut c)[0], Packet::HeartbeatBroadcast { .. }));
+
+        feed(
+            &mut c,
+            t0 + ms(1020),
+            HeartbeatReceivedPacket {
+                last_message_identifier: 6,
+                received_messages: u64::MAX,
+            },
+        );
+        assert_eq!(submits(&sent(&mut c)), vec![(7, "m7".to_string())]);
+        assert!(c.has_unacknowledged());
+
+        // The server finally acknowledges everything.
+        feed(&mut c, t0 + ms(1040), broadcast(0, 7, "echo"));
+        assert!(submits(&sent(&mut c)).is_empty());
+        assert!(!c.has_unacknowledged());
+    }
+
+    #[test]
+    fn message_request_triggers_retransmission_with_original_identifier() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        for i in 0..4 {
+            c.send_message(t0, MessageText::new(format!("m{i}")).unwrap())
+                .unwrap();
+        }
+        sent(&mut c);
+
+        // Server saw 3 but not 1 (bit 3 - 1 - 1 = 1).
+        feed(
+            &mut c,
+            t0,
+            Packet::MessageRequest {
+                user_id: ALICE_ID,
+                report: MissingMessages {
+                    last: 3,
+                    received: !(1u64 << 1),
+                },
+            },
+        );
+        assert_eq!(submits(&sent(&mut c)), vec![(1, "m1".to_string())]);
+    }
+
+    #[test]
+    fn retransmissions_carry_the_current_report() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        c.send_message(t0, MessageText::new("m0").unwrap()).unwrap();
+        sent(&mut c);
+        feed(&mut c, t0, broadcast(0, 0xFF, "hello")); // acks nothing, we got 0
+        let out = sent(&mut c);
+        let MessageSubmitPacket {
+            last_message_identifier,
+            ..
+        } = &out[0]
+        else {
+            panic!("expected a retransmission");
+        };
+        assert_eq!(last_message_identifier.into(), 0);
+    }
+
+    #[test]
+    fn reports_newer_than_anything_sent_are_ignored() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        c.send_message(t0, MessageText::new("m0").unwrap()).unwrap();
+        sent(&mut c);
+        feed(
+            &mut c,
+            t0,
+            HeartbeatReceivedPacket {
+                last_message_identifier: 50,
+                received_messages: 0,
+            },
+        );
+        assert!(sent(&mut c).is_empty());
+    }
+
+    // ---- termination -------------------------------------------------------
+
+    #[test]
+    fn user_disconnect_sends_connection_closed() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        c.disconnect(t0);
+        assert_eq!(
+            sent(&mut c),
+            vec![Packet::ConnectionClosed { user_id: ALICE_ID }]
+        );
+        assert_eq!(
+            events(&mut c),
+            vec![Event::Disconnected(DisconnectReason::UserRequested)]
+        );
+        assert!(c.is_offline());
+        assert_eq!(c.poll_timeout(), None);
+    }
+
+    #[test]
+    fn server_shutdown_uses_identifier_zero() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        feed(&mut c, t0, ConnectionClosedPacket { user_identifier: 9 });
+        assert!(c.is_online(), "closed for someone else: ignored");
+        feed(&mut c, t0, ConnectionClosedPacket { user_identifier: 0 });
+        assert_eq!(
+            events(&mut c),
+            vec![Event::Disconnected(DisconnectReason::ServerClosed)]
+        );
+        assert!(c.is_offline());
+    }
+
+    #[test]
+    fn garbage_and_unknown_packets_are_discarded() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        c.handle_packet(t0, &[]);
+        c.handle_packet(t0, &[0x00]);
+        c.handle_packet(t0, &[0x99, 1, 2, 3]);
+        c.handle_packet(t0, &[0x11, 0x00]);
+        assert!(c.is_online());
+        assert!(events(&mut c).is_empty());
+        assert!(sent(&mut c).is_empty());
+    }
+
+    #[test]
+    fn reconnecting_starts_fresh_streams() {
+        let t0 = Instant::now();
+        let mut c = online(t0);
+        c.send_message(t0, MessageText::new("old").unwrap())
+            .unwrap();
+        feed(&mut c, t0, broadcast(0, 0, "x"));
+        c.disconnect(t0);
+        sent(&mut c);
+        events(&mut c);
+
+        c.connect(t0 + ms(10));
+        sent(&mut c);
+        feed(
+            &mut c,
+            t0 + ms(20),
+            ConnectionAcceptedPacket { user_identifier: 8 },
+        );
+        c.send_message(t0 + ms(30), MessageText::new("new").unwrap())
+            .unwrap();
+        let out = sent(&mut c);
+        assert_eq!(
+            out,
+            vec![MessageSubmitPacket {
+                user_identifier: 8,
+                last_message_identifier: MissingMessages::INITIAL.last,
+                received_messages: MissingMessages::INITIAL.received,
+                message_identifier: 0,
+                message: "new".parse().unwrap()
+            }]
+        );
+    }
+}

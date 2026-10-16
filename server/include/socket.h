@@ -35,7 +35,7 @@ inline void initialize_socket()
 /**
  * Creates a socket at the given port
  */
-inline SOCKET create_socket(size_t port)
+inline SOCKET create_socket(const size_t port)
 {
 	// Create socket
 	const SOCKET socket = ::socket(
