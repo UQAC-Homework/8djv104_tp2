@@ -11,9 +11,10 @@ pub struct Arguments {
 
     /// Defines if network logs are shown
     pub verbose: bool,
-}
 
-// TODO: Add default values
+    /// Percentage of chance that a packet is dropped
+    pub packet_drop_rate: f32,
+}
 
 impl Arguments {
     pub fn new<I>(args: I) -> Result<Self, Option<String>>
@@ -21,18 +22,33 @@ impl Arguments {
         I: Iterator<Item = String>,
     {
         let mut verbose = false;
+        let mut packet_drop_rate: f32 = 0.0;
+        let mut parse_packet_drop_rate = false;
         let mut positional = Vec::new();
 
         for arg in args {
             match arg.as_str() {
                 "-v" | "--verbose" => verbose = true,
                 "-h" | "--help" => return Err(None),
+                "--loss" => parse_packet_drop_rate = true,
                 _ => {
                     if arg.starts_with('-') && arg.len() > 1 {
                         return Err(Some(format!("Unknown option: `{arg}`")));
                     }
 
-                    positional.push(arg)
+                    if parse_packet_drop_rate {
+                        parse_packet_drop_rate = false;
+
+                        let rate_conversion = arg.parse::<f32>();
+
+                        if rate_conversion.is_err() {
+                            return Err(Some(format!("Invalid loss probability: {}", arg)));
+                        }
+
+                        packet_drop_rate = rate_conversion.unwrap();
+                    } else {
+                        positional.push(arg)
+                    }
                 }
             }
         }
@@ -65,6 +81,7 @@ impl Arguments {
             server_port,
             username: username.parse().unwrap(),
             verbose,
+            packet_drop_rate,
         })
     }
 }
