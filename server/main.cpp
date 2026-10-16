@@ -17,8 +17,8 @@
 #include <vector>
 
 #include "include/network/packets/types.h"
-#include "include/serialization/PackerWriter.h"
-#include "include/serialization/PacketReader.h"
+#include "include/network/serialization/PackerWriter.h"
+#include "include/network/serialization/PacketReader.h"
 
 namespace protocol
 {

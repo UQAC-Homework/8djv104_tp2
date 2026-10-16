@@ -11,12 +11,12 @@ add_executable(server
         include/PacketType.h
         source/Logger.cpp
         include/Logger.h
-        include/serialization/PacketReader.h
-        source/serialization/PacketReader.cpp
-        source/serialization/PackerWriter.cpp
-        include/serialization/PackerWriter.h
+        include/network/serialization/PacketReader.h
+        source/network/serialization/PacketReader.cpp
+        source/network/serialization/PackerWriter.cpp
+        include/network/serialization/PackerWriter.h
         include/network/packets/types.h
-        include/serialization/WriteHelper.h
-        source/serialization/WriteHelper.cpp
-        include/serialization/ReadHelper.h
-        source/serialization/ReadHelper.cpp)
+        include/network/serialization/WriteHelper.h
+        source/network/serialization/WriteHelper.cpp
+        include/network/serialization/ReadHelper.h
+        source/network/serialization/ReadHelper.cpp)
