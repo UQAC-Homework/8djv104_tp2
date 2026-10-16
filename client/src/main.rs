@@ -19,6 +19,8 @@ mod network;
 mod time;
 
 use crate::application::arguments::Arguments;
+use crate::application::logger;
+use crate::application::logger::Level;
 use crate::models::username::Username;
 use crate::network::client::Client;
 use crate::network::packet::{MAX_MESSAGE_LEN, MessageText};
@@ -47,34 +49,40 @@ enum Input {
 }
 
 fn main() {
-    match run() {
+    let args = match Arguments::new(std::env::args().skip(1)) {
+        Ok(args) => args,
+        Err(msg) => {
+            if !msg.is_empty() {
+                log_error!("error: {msg}\n");
+            }
+            log_error!("{USAGE}");
+            std::process::exit(2);
+        }
+    };
+
+    match run(args) {
         Ok(code) => std::process::exit(code),
         Err(e) => {
-            eprintln!("error: {e}");
+            log_error!("error: {e}");
             std::process::exit(2);
         }
     }
 }
 
-fn run() -> Result<i32, Box<dyn Error>> {
-    let args = match Arguments::new(std::env::args().skip(1)) {
-        Ok(args) => args,
-        Err(msg) => {
-            if !msg.is_empty() {
-                eprintln!("error: {msg}\n");
-            }
-            eprintln!("{USAGE}");
-            return Ok(2);
-        }
-    };
-    let username = Username::new(args.username).map_err(|e| format!("invalid username: it {e}"))?;
-    let server = args
+fn run(arguments: Arguments) -> Result<i32, Box<dyn Error>> {
+    if arguments.verbose {
+        logger::set_level(Level::Debug);
+    }
+
+    let username =
+        Username::new(arguments.username).map_err(|e| format!("invalid username: it {e}"))?;
+    let server = arguments
         .server_address
         .to_socket_addrs()
         .map_err(|e| {
             format!(
                 "cannot use `{}` as a server address ({e}); expected host:port",
-                args.server_address
+                arguments.server_address
             )
         })?
         .next()
@@ -92,9 +100,8 @@ fn run() -> Result<i32, Box<dyn Error>> {
     spawn_socket_reader(socket.try_clone()?, tx.clone());
     spawn_stdin_reader(tx);
 
-    let verbose = args.verbose;
     let mut client = Client::new(username);
-    eprintln!(
+    log_info!(
         "* connecting to {server} (client id {:#x})...",
         client.client_id()
     );
@@ -121,7 +128,7 @@ fn run() -> Result<i32, Box<dyn Error>> {
                 exit_code = code;
             }
         }
-        flush_transmits(&mut client, &socket, verbose)?;
+        flush_transmits(&mut client, &socket)?;
         if client.is_offline() {
             break;
         }
@@ -147,11 +154,9 @@ fn run() -> Result<i32, Box<dyn Error>> {
         let now = Instant::now();
         match input {
             Ok(Input::Datagram(data)) => {
-                if verbose {
-                    match decode_packet(&data) {
-                        Ok(packet) => eprintln!("<- {packet:?}"),
-                        Err(e) => eprintln!("<- discarded: {e}"),
-                    }
+                match decode_packet(&data) {
+                    Ok(packet) => log_debug!("<- {packet:?}"),
+                    Err(e) => log_debug!("<- discarded: {e}"),
                 }
                 client.handle_packet(now, &data);
             }
@@ -163,7 +168,7 @@ fn run() -> Result<i32, Box<dyn Error>> {
                     match MessageText::new(line) {
                         Ok(text) => typed_before_online.push_back(text),
                         Err(e) => {
-                            eprintln!("! message not sent: it {e} (1-{MAX_MESSAGE_LEN} characters)")
+                            log_error!("! message not sent: it {e} (1-{MAX_MESSAGE_LEN} characters)")
                         }
                     }
                 }
@@ -180,14 +185,12 @@ fn run() -> Result<i32, Box<dyn Error>> {
 
 /// Sends everything the client queued. ICMP "connection refused" errors
 /// surfacing on a connected UDP socket just mean the datagram was lost.
-fn flush_transmits(client: &mut Client, socket: &UdpSocket, verbose: bool) -> io::Result<()> {
+fn flush_transmits(client: &mut Client, socket: &UdpSocket) -> io::Result<()> {
     while let Some(datagram) = client.poll_transmit() {
-        if verbose {
-            //if let Ok(packet) = decode_packet(&datagram) {
-            //eprintln!("-> {packet:?}");
-            eprintln!("-> {datagram:?}");
-            //}
-        }
+        //if let Ok(packet) = decode_packet(&datagram) {
+        //log_error!("-> {packet:?}");
+        log_debug!("-> {datagram:?}");
+        //}
         match socket.send(&datagram) {
             Ok(_) => {}
             Err(e)
@@ -206,15 +209,15 @@ fn show(event: &Event) -> io::Result<Option<i32>> {
     let mut out = io::stdout().lock();
     let code = match event {
         Event::Connected { user_id } => {
-            eprintln!("* connected as user {user_id}");
+            log_info!("* connected as user {user_id}");
             None
         }
         Event::Rejected => {
-            eprintln!("* the server rejected the connection");
+            log_info!("* the server rejected the connection");
             Some(1)
         }
         Event::ConnectFailed => {
-            eprintln!("* could not reach the server");
+            log_info!("* could not reach the server");
             Some(1)
         }
         Event::Message { sender, text, .. } => {
@@ -225,15 +228,15 @@ fn show(event: &Event) -> io::Result<Option<i32>> {
             None
         }
         Event::Disconnected(DisconnectReason::UserRequested) => {
-            eprintln!("* disconnected");
+            log_info!("* disconnected");
             Some(0)
         }
         Event::Disconnected(DisconnectReason::ServerClosed) => {
-            eprintln!("* the server closed the connection");
+            log_info!("* the server closed the connection");
             Some(1)
         }
         Event::Disconnected(DisconnectReason::ServerUnreachable) => {
-            eprintln!("* the server stopped answering; connection closed");
+            log_info!("* the server stopped answering; connection closed");
             Some(1)
         }
     };
@@ -276,7 +279,7 @@ fn spawn_stdin_reader(tx: Sender<Input>) {
                     }
                 }
                 Err(e) if e.kind() == io::ErrorKind::InvalidData => {
-                    eprintln!("! line skipped: input is not valid text");
+                    log_error!("! line skipped: input is not valid text");
                 }
                 Err(_) => break,
             }
