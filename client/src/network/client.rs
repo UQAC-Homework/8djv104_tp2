@@ -132,10 +132,9 @@ impl Client {
     pub fn disconnect(&mut self, now: Instant) {
         match self.state {
             State::Online(session) => {
-                self.transmit(now, &ConnectionClosedPacket::close_session(session.user_id));
+                self.transmit(now, &ConnectionClosedPacket::close_session(&session));
                 self.state = State::Offline;
-                self.events
-                    .push_back(UserEvent::disconnect_by_user());
+                self.events.push_back(UserEvent::disconnect_by_user());
             }
             State::Connecting { .. } => self.state = State::Offline,
             State::Offline => {}
@@ -186,8 +185,7 @@ impl Client {
                 }
 
                 self.state = State::Offline;
-                self.events
-                    .push_back(UserEvent::disconnected_by_server());
+                self.events.push_back(UserEvent::disconnected_by_server());
             }
             NetworkPacket::MessageBroadcast(MessageBroadcastPacket {
                 message_identifier,
@@ -209,7 +207,8 @@ impl Client {
                 // Duplicates carry fresh reports too.
                 self.process_report(now, report);
                 if arrival != Arrival::Ignored {
-                    self.events.push_back(UserEvent::new_message(username, message));
+                    self.events
+                        .push_back(UserEvent::new_message(username, message));
                 }
             }
             NetworkPacket::MessageRequest(MessageRequestPacket {
@@ -347,11 +346,10 @@ impl Client {
                     heartbeat_repeater,
                 } => {
                     if server_timeout_timer.has_expired() {
-                        let user_identifier = session.user_id;
-                        self.transmit(now, &ConnectionClosedPacket::close_session(user_identifier));
+                        let packet = ConnectionClosedPacket::close_session(session);
+                        self.transmit(now, &packet);
                         self.state = State::Offline;
-                        self.events
-                            .push_back(UserEvent::disconnected_by_timeout());
+                        self.events.push_back(UserEvent::disconnected_by_timeout());
                     } else if heartbeat_repeater.pool() {
                         self.send_heartbeat(now);
                     }
