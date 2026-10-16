@@ -1,6 +1,6 @@
 use std::fmt::{Arguments, Display};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 
 /// List of possible levels of log
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -37,17 +37,33 @@ fn is_enabled(level: Level) -> bool {
     level as u8 >= MIN_LEVEL.load(Ordering::Relaxed)
 }
 
+fn get_time() -> Result<String, SystemTimeError> {
+    let now = SystemTime::now();
+    let duration = now.duration_since(UNIX_EPOCH)?;
+
+    let total_secs = duration.as_secs();
+    let milliseconds = duration.subsec_millis();
+
+    let seconds = total_secs % 60;
+    let minutes = (total_secs / 60) % 60;
+    let hours = (total_secs / 3600) % 24;
+
+    let time_string = format!(
+        "{:02}:{:02}:{:02}:{:03}",
+        hours, minutes, seconds, milliseconds
+    );
+
+    Ok(time_string)
+}
+
 pub fn log(level: Level, args: Arguments) {
     if !is_enabled(level) {
         return;
     }
 
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs_f64())
-        .unwrap_or(0.0);
+    let time = get_time().unwrap_or("???".parse().unwrap());
 
-    let line = format!("[{secs:.3}] [{:<5}] {args}", level.to_string());
+    let line = format!("[{time}] [{:<5}] {args}", level.to_string());
 
     if level == Level::Error {
         eprintln!("{}", line);
