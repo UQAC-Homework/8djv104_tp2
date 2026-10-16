@@ -31,7 +31,7 @@ pub fn encode_packet<P: Packet>(packet: &P) -> Vec<u8> {
     writer.write_byte(P::MAGIC);
     packet.serialize(&mut writer);
 
-    writer.buffer().to_vec()
+    writer.buffer()
 }
 
 pub fn decode_packet(datagram: &[u8]) -> Result<NetworkPacket, DecodeError> {

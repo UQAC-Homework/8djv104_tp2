@@ -1,12 +1,12 @@
 use crate::network::serialization::write_helper::{write_variable_u8, write_variable_u16, write_variable_u64};
 
+/// Maximum size of a packet in bytes
+const MAXIMUM_PACKET_SIZE: usize = 1024;
+
 /// Structure used to write packets into a binary format
 pub struct PacketWriter {
     /// Buffer to write to
-    buffer: [u8; 1024],
-
-    /// Length of the buffer in bits
-    length: usize,
+    buffer: Vec<u8>,
 
     /// Offset from the start of the buffer in bits
     offset: usize,
@@ -16,26 +16,19 @@ impl PacketWriter {
     /// Creates a new writer
     pub fn new() -> Self {
         Self {
-            buffer: [0; 1024],
-            length: 1024 * 8,
+            buffer: Vec::new(),
             offset: 0,
         }
     }
 
     /// Gets the buffer of the writer
-    pub fn buffer(&self) -> &[u8] {
-        let mut used_length = self.offset / 8;
-        
-        if self.offset % 8 != 0 {
-            used_length += 1;
-        }
-
-        &self.buffer[..used_length]
+    pub fn buffer(&self) -> Vec<u8> {
+        self.buffer.clone()
     }
 
     /// Checks if the writer can write the given amount of bits
     fn can_write(&self, size: usize) -> bool {
-        self.offset + size <= self.length
+        self.offset + size <= MAXIMUM_PACKET_SIZE * 8
     }
 
     /// Writes the given nybble
