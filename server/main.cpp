@@ -163,8 +163,8 @@ namespace protocol
 					fd_set set;
 					FD_ZERO(&set);
 					FD_SET(socket_, &set);
-					timeval timeout{0, 50000};
-					int ready = select(socket_ + 1, &set, nullptr, nullptr, &timeout);
+					timeval timeout{.tv_sec = 0, .tv_usec = 50000};
+					const int ready = select(socket_ + 1, &set, nullptr, nullptr, &timeout);
 					if (ready < 0)
 					{
 						if (errno == EINTR) continue;
@@ -255,7 +255,7 @@ namespace protocol
 			void handle_packet(const uint8_t* data, const std::size_t size, const sockaddr_in& peer)
 			{
 				if (size == 0) return;
-				BitReader r(data, size);
+				const BitReader r(data, size);
 				uint64_t raw = 0;
 				if (!r.get(0, 8, raw) || raw == 0) return;
 				switch (static_cast<uint8_t>(raw))

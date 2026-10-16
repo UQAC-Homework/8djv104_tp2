@@ -1,3 +1,4 @@
+use crate::network::other::Session;
 use crate::network::packets::packet::Packet;
 use crate::network::serialization::packet_reader::PacketReader;
 use crate::network::serialization::packet_writer::PacketWriter;
@@ -24,6 +25,15 @@ impl Packet for ConnectionClosedPacket {
 
         Self {
             user_identifier: user_id,
+        }
+    }
+}
+
+impl ConnectionClosedPacket {
+    /// Creates a closing packet to close the given session
+    pub fn close_session(session: Session) -> Self {
+        Self {
+            user_identifier: session.user_id,
         }
     }
 }

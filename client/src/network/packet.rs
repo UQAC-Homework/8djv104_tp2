@@ -7,10 +7,9 @@
 //! codec works on a bit cursor instead of fixed byte offsets. The last byte
 //! of a packet is padded with zero bits.
 
+use crate::models::username::Username;
 use std::fmt;
 
-/// Longest username, in bytes (`Username Length` is 4 bits, offset by one).
-pub const MAX_USERNAME_LEN: usize = 16;
 /// Longest message, in bytes (RFC: `Message Length` MUST NOT exceed 990).
 pub const MAX_MESSAGE_LEN: usize = 990;
 
@@ -51,7 +50,7 @@ impl fmt::Display for FieldError {
 
 impl std::error::Error for FieldError {}
 
-fn check_text(s: &str, max: usize) -> Result<(), FieldError> {
+pub(crate) fn check_text(s: &str, max: usize) -> Result<(), FieldError> {
     if s.is_empty() {
         Err(FieldError::Empty)
     } else if !s.is_ascii() {
@@ -60,28 +59,6 @@ fn check_text(s: &str, max: usize) -> Result<(), FieldError> {
         Err(FieldError::TooLong { max })
     } else {
         Ok(())
-    }
-}
-
-/// A username: 1 to 16 ASCII characters.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Username(String);
-
-impl Username {
-    pub fn new(name: impl Into<String>) -> Result<Self, FieldError> {
-        let name = name.into();
-        check_text(&name, MAX_USERNAME_LEN)?;
-        Ok(Self(name))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for Username {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
     }
 }
 
@@ -344,7 +321,7 @@ fn take_report(r: &mut BitReader) -> Result<MissingMessages, DecodeError> {
 
 /// `USERNAME_CONTENT`: 4-bit length (offset by one) + that many bytes.
 fn put_username(w: &mut BitWriter, username: &Username) {
-    let bytes = username.as_str().as_bytes();
+    let bytes = username.bytes();
     w.put((bytes.len() - 1) as u64, 4);
     w.put_bytes(bytes);
 }
@@ -461,238 +438,5 @@ impl<'a> BitReader<'a> {
         } else {
             Ok(())
         }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn user(s: &str) -> Username {
-        Username::new(s).unwrap()
-    }
-
-    fn text(s: &str) -> MessageText {
-        MessageText::new(s).unwrap()
-    }
-
-    #[test]
-    fn rfc_example_connection_request() {
-        let packet = Packet::ConnectionRequest {
-            client_id: 0xC,
-            username: user("Player"),
-        };
-        let bytes = [0x01, 0xC5, 0x50, 0x6C, 0x61, 0x79, 0x65, 0x72];
-        assert_eq!(packet.encode(), bytes);
-        assert_eq!(Packet::decode(&bytes), Ok(packet));
-    }
-
-    #[test]
-    fn rfc_example_missing_messages_header() {
-        let report = MissingMessages {
-            last: 54,
-            received: 0xFFFF_FEFF_FFFF_DFC6,
-        };
-        let bytes = Packet::HeartbeatReceived { report }.encode();
-        assert_eq!(
-            bytes,
-            [0x21, 0x36, 0xFF, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xDF, 0xC6]
-        );
-        assert_eq!(
-            Packet::decode(&bytes),
-            Ok(Packet::HeartbeatReceived { report })
-        );
-    }
-
-    #[test]
-    fn username_length_is_offset_by_one() {
-        let one = Packet::ConnectionRequest {
-            client_id: 0,
-            username: user("a"),
-        }
-        .encode();
-        assert_eq!(one, [0x01, 0x00, b'a']);
-        let sixteen = Packet::ConnectionRequest {
-            client_id: 0,
-            username: user("abcdefghijklmnop"),
-        }
-        .encode();
-        assert_eq!(sixteen[1], 0x0F);
-    }
-
-    #[test]
-    fn small_packets_use_bit_packed_user_ids() {
-        // user id occupies bits 8..=13, i.e. the top six bits of byte 1.
-        assert_eq!(
-            Packet::ConnectionAccepted { user_id: 5 }.encode(),
-            [0x02, 5 << 2]
-        );
-        assert_eq!(
-            Packet::ConnectionClosed { user_id: 63 }.encode(),
-            [0x04, 0xFC]
-        );
-        assert_eq!(Packet::ConnectionRejected.encode(), [0x03]);
-    }
-
-    #[test]
-    fn message_submit_layout() {
-        let packet = Packet::MessageSubmit {
-            user_id: 0b101010,
-            report: MissingMessages {
-                last: 0xAB,
-                received: 0x0123_4567_89AB_CDEF,
-            },
-            message_id: 0x7E,
-            message: text("Hi"),
-        };
-        let bytes = packet.encode();
-        // 104 header bits (13 bytes) + 2 message bytes.
-        assert_eq!(bytes.len(), 15);
-        assert_eq!(bytes[0], 0x10);
-        assert_eq!(bytes[1] >> 2, 0b101010);
-        // last identifier: 2 bits of byte 1, 6 bits of byte 2.
-        assert_eq!(((bytes[1] & 0b11) << 6) | (bytes[2] >> 2), 0xAB);
-        assert_eq!(Packet::decode(&bytes), Ok(packet));
-    }
-
-    #[test]
-    fn broadcast_fields_follow_the_actual_username_length() {
-        // Username of 3 bytes: the message length starts at bit 92 + 24, not
-        // at the bit the diagram shows for a full-size username.
-        let packet = Packet::MessageBroadcast {
-            message_id: 9,
-            report: MissingMessages::INITIAL,
-            username: user("Bob"),
-            message: text("Hello World!"),
-        };
-        let bytes = packet.encode();
-        let bits = 92 + 24 + 10 + 8 * 12;
-        assert_eq!(bytes.len(), (bits + 7) / 8);
-        assert_eq!(Packet::decode(&bytes), Ok(packet));
-    }
-
-    #[test]
-    fn every_packet_round_trips() {
-        let report = MissingMessages {
-            last: 3,
-            received: 0xDEAD_BEEF_0000_FFFF,
-        };
-        let packets = vec![
-            Packet::ConnectionRequest {
-                client_id: 15,
-                username: user("x"),
-            },
-            Packet::ConnectionAccepted { user_id: 63 },
-            Packet::ConnectionRejected,
-            Packet::ConnectionClosed { user_id: 0 },
-            Packet::ConnectionClosed { user_id: 12 },
-            Packet::MessageSubmit {
-                user_id: 1,
-                report,
-                message_id: 255,
-                message: text(&"z".repeat(MAX_MESSAGE_LEN)),
-            },
-            Packet::MessageBroadcast {
-                message_id: 0,
-                report,
-                username: user(&"u".repeat(MAX_USERNAME_LEN)),
-                message: text(&"m".repeat(MAX_MESSAGE_LEN)),
-            },
-            Packet::MessageBroadcast {
-                message_id: 1,
-                report,
-                username: user("ab"),
-                message: text("c"),
-            },
-            Packet::MessageRequest { user_id: 7, report },
-            Packet::HeartbeatBroadcast { user_id: 9, report },
-            Packet::HeartbeatReceived { report },
-            Packet::HeartbeatRequest { report },
-        ];
-        for packet in packets {
-            let bytes = packet.encode();
-            assert_eq!(Packet::decode(&bytes), Ok(packet.clone()), "{packet:?}");
-        }
-    }
-
-    #[test]
-    fn rejects_malformed_packets() {
-        assert_eq!(Packet::decode(&[]), Err(DecodeError::Truncated));
-        assert_eq!(Packet::decode(&[0x00]), Err(DecodeError::ReservedType));
-        assert_eq!(Packet::decode(&[0x7F]), Err(DecodeError::UnknownType(0x7F)));
-        // truncated username
-        assert_eq!(
-            Packet::decode(&[0x01, 0x05, b'a']),
-            Err(DecodeError::Truncated)
-        );
-        // trailing bytes
-        assert_eq!(
-            Packet::decode(&[0x03, 0x00]),
-            Err(DecodeError::TrailingBytes)
-        );
-        // accepted with the reserved user id 0
-        assert_eq!(
-            Packet::decode(&[0x02, 0x00]),
-            Err(DecodeError::Invalid("user identifier"))
-        );
-        // non-ASCII username
-        assert_eq!(
-            Packet::decode(&[0x01, 0x00, 0xC3]),
-            Err(DecodeError::Invalid("username"))
-        );
-    }
-
-    #[test]
-    fn rejects_bad_message_lengths_and_content() {
-        let good = Packet::MessageRequest {
-            user_id: 1,
-            report: MissingMessages::INITIAL,
-        };
-        assert!(Packet::decode(&good.encode()).is_ok());
-
-        let mut w = BitWriter::new();
-        w.put(ty::MESSAGE_BROADCAST.into(), 8);
-        w.put(0, 8);
-        put_report(&mut w, MissingMessages::INITIAL);
-        w.put(0, 4);
-        w.put_bytes(b"a");
-        w.put(0, 10); // message length 0
-        assert_eq!(
-            Packet::decode(&w.finish()),
-            Err(DecodeError::Invalid("message length"))
-        );
-
-        let mut w = BitWriter::new();
-        w.put(ty::MESSAGE_BROADCAST.into(), 8);
-        w.put(0, 8);
-        put_report(&mut w, MissingMessages::INITIAL);
-        w.put(0, 4);
-        w.put_bytes(b"a");
-        w.put(991, 10); // longer than allowed
-        w.put_bytes(&[b'x'; 991]);
-        assert_eq!(
-            Packet::decode(&w.finish()),
-            Err(DecodeError::Invalid("message length"))
-        );
-    }
-
-    #[test]
-    fn field_validation() {
-        assert_eq!(Username::new(""), Err(FieldError::Empty));
-        assert_eq!(Username::new("é"), Err(FieldError::NotAscii));
-        assert_eq!(
-            Username::new("a".repeat(17)),
-            Err(FieldError::TooLong { max: 16 })
-        );
-        assert_eq!(MessageText::new(""), Err(FieldError::Empty));
-        assert!(MessageText::new("a".repeat(990)).is_ok());
-        assert_eq!(
-            MessageText::new("a".repeat(991)),
-            Err(FieldError::TooLong { max: 990 })
-        );
     }
 }

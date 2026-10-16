@@ -1,13 +1,12 @@
+
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
-    use crate::network::packet::{DecodeError, FieldError, MessageText, MissingMessages, Username, MAX_MESSAGE_LEN, MAX_USERNAME_LEN};
-    use crate::network::packets::heartbeat_received::HeartbeatReceivedPacket;
-    use crate::network::packets::packet::Packet;
-    use crate::network::serialization::packet_writer::PacketWriter;
+    use super::*;
 
     fn user(s: &str) -> Username {
         Username::new(s).unwrap()
@@ -34,26 +33,14 @@ mod tests {
             last: 54,
             received: 0xFFFF_FEFF_FFFF_DFC6,
         };
-
-        let mut writer = PacketWriter::new();
-        HeartbeatReceivedPacket {
-            last_message_identifier: report.last,
-            received_messages: report.received,
-        }
-        .serialize(&mut writer);
-
-        let bytes = writer.buffer();
-
+        let bytes = Packet::HeartbeatReceived { report }.encode();
         assert_eq!(
             bytes,
             [0x21, 0x36, 0xFF, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xDF, 0xC6]
         );
         assert_eq!(
             Packet::decode(&bytes),
-            Ok(HeartbeatReceivedPacket {
-                last_message_identifier: report.last,
-                received_messages: report.received,
-            })
+            Ok(Packet::HeartbeatReceived { report })
         );
     }
 

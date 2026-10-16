@@ -1,5 +1,7 @@
 use std::fmt;
 use std::time::Instant;
+use crate::time::repeater::Repeater;
+use crate::time::timeout::Timeout;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisconnectReason {
@@ -42,12 +44,12 @@ impl fmt::Display for NotOnline {
 
 impl std::error::Error for NotOnline {}
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum State {
     Offline,
     Connecting {
-        started: Instant,
-        next_retry: Instant,
+        timeout_timer: Timeout,
+        retry_repeater: Repeater,
     },
     Online(Session),
 }
@@ -67,7 +69,7 @@ pub enum Liveness {
     /// `Wait`: heartbeats go out every `HEARTBEAT_INTERVAL` until the server
     /// answers or `SERVER_INACTIVITY_TIMEOUT` expires.
     Waiting {
-        next_heartbeat: Instant,
-        give_up_at: Instant,
+        server_timeout_timer: Timeout,
+        heartbeat_repeater: Repeater,
     },
 }

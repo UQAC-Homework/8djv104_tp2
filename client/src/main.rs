@@ -15,10 +15,13 @@ use std::time::{Duration, Instant};
 
 mod network;
 mod application;
+mod time;
+mod models;
 
 use crate::application::arguments::Arguments;
+use crate::models::username::Username;
 use crate::network::client::Client;
-use crate::network::packet::{MAX_MESSAGE_LEN, MessageText, Packet, Username};
+use crate::network::packet::{MAX_MESSAGE_LEN, MessageText, Packet};
 
 const USAGE: &str = "\
 Usage: udp-chat-client [--verbose] <server:port> <username>
@@ -94,7 +97,7 @@ fn run() -> Result<i32, Box<dyn Error>> {
         "* connecting to {server} (client id {:#x})...",
         client.client_id()
     );
-    client.connect(Instant::now());
+    client.connect();
 
     let mut exit_code = 0;
     let mut typed_before_online: VecDeque<MessageText> = VecDeque::new();

@@ -17,12 +17,24 @@
 //! | Data transfer     | `send_message` / `MessageBroadcast` handling       |
 //! | Termination       | `disconnect`, `CONNECTION_CLOSED`, heartbeat give-up |
 
-use crate::application::constants::{HEARTBEAT_INTERVAL, INACTIVITY_WARNING, SERVER_CONNECTION_INTERVAL, SERVER_CONNECTION_TIMEOUT, SERVER_INACTIVITY_TIMEOUT};
+use crate::application::constants::{
+    HEARTBEAT_INTERVAL, INACTIVITY_WARNING, SERVER_CONNECTION_INTERVAL, SERVER_CONNECTION_TIMEOUT,
+    SERVER_INACTIVITY_TIMEOUT,
+};
 use crate::network::other::{DisconnectReason, Event, Liveness, NotOnline, Session, State};
-use crate::network::packet::{MessageText, MissingMessages, Packet, Username};
+use crate::network::packet::{MessageText, MissingMessages, Packet};
+use crate::network::packets::connection_closed::ConnectionClosedPacket;
+use crate::network::packets::connection_request::ConnectionRequestPacket;
+use crate::network::packets::heartbeat_broadcast::HeartbeatBroadcastPacket;
+use crate::network::packets::message_request::MessageRequestPacket;
+use crate::network::packets::message_submit::MessageSubmitPacket;
+use crate::network::packets::packet::{Packet as Packet2, encode_packet};
 use crate::network::reliability::{Arrival, ReceiveWindow, SendHistory};
+use crate::time::repeater::Repeater;
+use crate::time::timeout::Timeout;
 use std::collections::VecDeque;
 use std::time::Instant;
+use crate::models::username::Username;
 
 pub struct Client {
     username: Username,
@@ -79,7 +91,7 @@ impl Client {
     // ---- user actions ------------------------------------------------------
 
     /// Offline -> Connecting: sends `CONNECTION_REQUEST`.
-    pub fn connect(&mut self, now: Instant) {
+    pub fn connect(&mut self) {
         if !matches!(self.state, State::Offline) {
             return;
         }
@@ -88,8 +100,8 @@ impl Client {
         self.tx = SendHistory::new();
         self.peer = MissingMessages::INITIAL;
         self.state = State::Connecting {
-            started: now,
-            next_retry: now + SERVER_CONNECTION_INTERVAL,
+            timeout_timer: Timeout::new(SERVER_CONNECTION_TIMEOUT),
+            retry_repeater: Repeater::new(SERVER_CONNECTION_INTERVAL),
         };
         self.send_connection_request();
     }
@@ -101,11 +113,12 @@ impl Client {
         };
         // The history is updated before the first emission.
         let message_id = self.tx.record(text.clone());
-        let packet = Packet::MessageSubmit {
-            user_id: session.user_id,
-            report: self.rx.report(),
-            message_id,
-            message: text,
+        let packet = MessageSubmitPacket {
+            user_identifier: session.user_id,
+            last_message_identifier: self.rx.report().last,
+            received_messages: self.rx.report().received,
+            message_identifier: message_id,
+            message: text.to_string(),
         };
         self.transmit(now, &packet);
         Ok(())
@@ -116,12 +129,7 @@ impl Client {
     pub fn disconnect(&mut self, now: Instant) {
         match self.state {
             State::Online(session) => {
-                self.transmit(
-                    now,
-                    &Packet::ConnectionClosed {
-                        user_id: session.user_id,
-                    },
-                );
+                self.transmit(now, &ConnectionClosedPacket::close_session(session));
                 self.state = State::Offline;
                 self.events
                     .push_back(Event::Disconnected(DisconnectReason::UserRequested));
@@ -222,15 +230,16 @@ impl Client {
             return;
         };
         let current = self.rx.report();
-        let resend: Vec<Packet> = self
+        let resend: Vec<MessageSubmitPacket> = self
             .tx
             .missing(report)
             .into_iter()
-            .map(|(message_id, text)| Packet::MessageSubmit {
-                user_id: session.user_id,
-                report: current,
-                message_id,
-                message: text.clone(),
+            .map(|(message_id, text)| MessageSubmitPacket {
+                user_identifier: session.user_id,
+                last_message_identifier: current.last,
+                received_messages: current.received,
+                message_identifier: message_id,
+                message: text.clone().to_string(),
             })
             .collect();
         for packet in &resend {
@@ -245,15 +254,25 @@ impl Client {
         match self.state {
             State::Offline => None,
             State::Connecting {
-                started,
-                next_retry,
-            } => Some(next_retry.min(started + SERVER_CONNECTION_TIMEOUT)),
+                timeout_timer,
+                retry_repeater,
+            } => {
+                let minimum_remaining = retry_repeater.remaining().min(timeout_timer.remaining());
+
+                Some(Instant::now() + minimum_remaining)
+            }
             State::Online(Session { liveness, .. }) => Some(match liveness {
                 Liveness::Idle { warn_at } => warn_at,
                 Liveness::Waiting {
-                    next_heartbeat,
-                    give_up_at,
-                } => next_heartbeat.min(give_up_at),
+                    heartbeat_repeater,
+                    server_timeout_timer,
+                } => {
+                    let minimum_remaining = heartbeat_repeater
+                        .remaining()
+                        .min(server_timeout_timer.remaining());
+
+                    Instant::now() + minimum_remaining
+                }
             }),
         }
     }
@@ -263,16 +282,17 @@ impl Client {
         match self.state {
             State::Offline => {}
             State::Connecting {
-                started,
-                next_retry,
+                timeout_timer,
+                mut retry_repeater,
             } => {
-                if now >= started + SERVER_CONNECTION_TIMEOUT {
+                if timeout_timer.has_expired() {
                     self.state = State::Offline;
                     self.events.push_back(Event::ConnectFailed);
-                } else if now >= next_retry {
+                } else if retry_repeater.is_due() {
+                    retry_repeater.reset();
                     self.state = State::Connecting {
-                        started,
-                        next_retry: now + SERVER_CONNECTION_INTERVAL,
+                        timeout_timer,
+                        retry_repeater,
                     };
                     self.send_connection_request();
                 }
@@ -281,33 +301,24 @@ impl Client {
                 Liveness::Idle { warn_at } if now >= warn_at => {
                     // INACTIVITY_WARNING expired: start heartbeating.
                     session.liveness = Liveness::Waiting {
-                        next_heartbeat: now + HEARTBEAT_INTERVAL,
-                        give_up_at: now + SERVER_INACTIVITY_TIMEOUT,
+                        heartbeat_repeater: Repeater::new(HEARTBEAT_INTERVAL),
+                        server_timeout_timer: Timeout::new(SERVER_INACTIVITY_TIMEOUT),
                     };
                     self.state = State::Online(session);
                     self.send_heartbeat(now);
                 }
                 Liveness::Waiting {
-                    next_heartbeat,
-                    give_up_at,
+                    server_timeout_timer,
+                    mut heartbeat_repeater,
                 } => {
-                    if now >= give_up_at {
-                        // SERVER_INACTIVITY_TIMEOUT expired.
-                        self.transmit(
-                            now,
-                            &Packet::ConnectionClosed {
-                                user_id: session.user_id,
-                            },
-                        );
+                    if server_timeout_timer.has_expired() {
+                        self.transmit(now, &ConnectionClosedPacket::close_session(session));
                         self.state = State::Offline;
                         self.events
                             .push_back(Event::Disconnected(DisconnectReason::ServerUnreachable));
-                    } else if now >= next_heartbeat {
-                        session.liveness = Liveness::Waiting {
-                            next_heartbeat: now + HEARTBEAT_INTERVAL,
-                            give_up_at,
-                        };
-                        self.state = State::Online(session);
+                    } else if heartbeat_repeater.is_due() {
+                        heartbeat_repeater.reset();
+                        
                         self.send_heartbeat(now);
                     }
                 }
@@ -339,8 +350,9 @@ impl Client {
 
     /// Queues a datagram. Sending restarts `INACTIVITY_WARNING`, but only
     /// while that timer is still running (i.e. not while waiting).
-    fn transmit(&mut self, now: Instant, packet: &Packet) {
-        self.outbox.push_back(packet.encode());
+    fn transmit<P: Packet2>(&mut self, now: Instant, packet: &P) {
+        self.outbox.push_back(encode_packet(packet));
+
         if let State::Online(Session {
             liveness: Liveness::Idle { warn_at },
             ..
@@ -351,24 +363,38 @@ impl Client {
     }
 
     fn send_connection_request(&mut self) {
-        let packet = Packet::ConnectionRequest {
-            client_id: self.client_id,
-            username: self.username.clone(),
+        let packet = ConnectionRequestPacket {
+            client_identifier: self.client_id,
+            username: self.username.clone().to_string(),
         };
-        self.outbox.push_back(packet.encode());
+        self.outbox.push_back(encode_packet(&packet));
     }
 
     fn send_heartbeat(&mut self, now: Instant) {
         if let Some(user_id) = self.user_id() {
             let report = self.rx.report();
-            self.transmit(now, &Packet::HeartbeatBroadcast { user_id, report });
+            self.transmit(
+                now,
+                &HeartbeatBroadcastPacket {
+                    user_identifier: user_id,
+                    last_message_identifier: report.last,
+                    received_messages: report.received,
+                },
+            );
         }
     }
 
     fn request_missing(&mut self, now: Instant) {
         if let Some(user_id) = self.user_id() {
             let report = self.rx.report();
-            self.transmit(now, &Packet::MessageRequest { user_id, report });
+            self.transmit(
+                now,
+                &MessageRequestPacket {
+                    user_identifier: user_id,
+                    last_message_identifier: report.last,
+                    received_messages: report.received,
+                },
+            );
         }
     }
 
