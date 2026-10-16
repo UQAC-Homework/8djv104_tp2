@@ -12,8 +12,8 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
-#include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -21,19 +21,12 @@
 #include <unordered_map>
 #include <vector>
 
+#include "include/network/packets/types.h"
+#include "include/serialization/PackerWriter.h"
+#include "include/serialization/PacketReader.h"
+
 namespace protocol
 {
-	constexpr uint8_t CONNECTION_REQUEST = 0x01;
-	constexpr uint8_t CONNECTION_ACCEPTED = 0x02;
-	constexpr uint8_t CONNECTION_REJECTED = 0x03;
-	constexpr uint8_t CONNECTION_CLOSED = 0x04;
-	constexpr uint8_t MESSAGE_SUBMIT = 0x10;
-	constexpr uint8_t MESSAGE_BROADCAST = 0x11;
-	constexpr uint8_t MESSAGE_REQUEST = 0x12;
-	constexpr uint8_t HEARTBEAT_BROADCAST = 0x20;
-	constexpr uint8_t HEARTBEAT_RECEIVED = 0x21;
-	constexpr uint8_t HEARTBEAT_REQUEST = 0x22;
-
 	constexpr std::size_t MAX_DATAGRAM = 2048;
 	constexpr std::size_t MAX_USERNAME = 16;
 	constexpr std::size_t MAX_MESSAGE = 990;
@@ -67,41 +60,6 @@ namespace protocol
 
 		private:
 			const uint8_t* data_;
-			std::size_t bits_;
-		};
-
-		class BitWriter
-		{
-		public:
-			explicit BitWriter(const std::size_t bits) : data_((bits + 7) / 8, 0), bits_(bits)
-			{
-			}
-
-			bool put(const std::size_t offset, const unsigned width, const uint64_t value)
-			{
-				if (width > 64 || offset > bits_ || width > bits_ - offset) return false;
-				for (unsigned i = 0; i < width; ++i)
-				{
-					const auto bit = offset + i;
-					const auto b = static_cast<uint8_t>((value >> (width - 1 - i)) & 1u);
-					const auto mask = static_cast<uint8_t>(1u << (7 - bit % 8));
-					if (b) data_[bit / 8] |= mask;
-					else data_[bit / 8] &= static_cast<uint8_t>(~mask);
-				}
-				return true;
-			}
-
-			bool put_bytes(const std::size_t offset, const std::string& value)
-			{
-				for (std::size_t i = 0; i < value.size(); ++i)
-					if (!put(offset + i * 8, 8, static_cast<uint8_t>(value[i]))) return false;
-				return true;
-			}
-
-			[[nodiscard]] const std::vector<uint8_t>& bytes() const { return data_; }
-
-		private:
-			std::vector<uint8_t> data_;
 			std::size_t bits_;
 		};
 
@@ -199,10 +157,10 @@ namespace protocol
 
 			void send_user_packet(const sockaddr_in& to, const uint8_t type, const uint8_t userId) const
 			{
-				BitWriter w(16);
-				w.put(0, 8, type);
-				w.put(8, 6, userId);
-				send_packet(to, w.bytes());
+				PacketWriter writer;
+				writer.writeByte(type);
+				writer.writeSextet(userId);
+				send_packet(to, writer.getBuffer());
 			}
 
 			static bool same_endpoint(const sockaddr_in& a, const sockaddr_in& b)
@@ -411,11 +369,11 @@ namespace protocol
 
 			void send_receive_status(const sockaddr_in& to, const uint8_t type, const Session& s) const
 			{
-				BitWriter w(80);
-				w.put(0, 8, type);
-				w.put(8, 8, s.lastClientMessageId);
-				w.put(16, 64, s.receivedClientMessages);
-				send_packet(to, w.bytes());
+				PacketWriter writer;
+				writer.writeByte(type);
+				writer.writeByte(s.lastClientMessageId);
+				writer.writeQuadword(s.receivedClientMessages);
+				send_packet(to, writer.getBuffer());
 			}
 
 			void handle_message_submit(const BitReader& r, const sockaddr_in& peer)
@@ -484,11 +442,11 @@ namespace protocol
 					if (s.suspicious && now >= s.nextHeartbeatRequest)
 					{
 						// HEARTBEAT_REQUEST reports the server's receive state for this client.
-						BitWriter w(80);
-						w.put(0, 8, HEARTBEAT_REQUEST);
-						w.put(8, 8, s.lastClientMessageId);
-						w.put(16, 64, s.receivedClientMessages);
-						send_packet(s.address, w.bytes());
+						PacketWriter writer;
+						writer.writeByte(HEARTBEAT_REQUEST);
+						writer.writeByte(s.lastClientMessageId);
+						writer.writeQuadword(s.receivedClientMessages);
+						send_packet(s.address, writer.getBuffer());
 						s.nextHeartbeatRequest = now + std::chrono::milliseconds(200);
 					}
 				}
@@ -500,23 +458,23 @@ namespace protocol
 		                                    const bool retransmission) const
 		{
 			(void)retransmission;
+
 			if (stored.username.empty() || stored.username.size() > MAX_USERNAME ||
 				stored.text.empty() || stored.text.size() > MAX_MESSAGE)
 				return;
-			// RFC's variable-length USERNAME_CONTENT and MESSAGE_CONTENT fields.
-			const std::size_t bits = 8 + 8 + 8 + 64 + 4 + stored.username.size() * 8 +
-				10 + stored.text.size() * 8;
-			BitWriter w(bits);
-			w.put(0, 8, MESSAGE_BROADCAST);
-			w.put(8, 8, stored.id);
-			w.put(16, 8, recipient.lastClientMessageId);
-			w.put(24, 64, recipient.receivedClientMessages);
-			w.put(88, 4, stored.username.size() - 1);
-			w.put_bytes(92, stored.username);
-			const std::size_t lengthOffset = 92 + stored.username.size() * 8;
-			w.put(lengthOffset, 10, stored.text.size());
-			w.put_bytes(lengthOffset + 10, stored.text);
-			send_packet(recipient.address, w.bytes());
+
+			PacketWriter writer;
+
+			writer.writeByte(MESSAGE_BROADCAST);
+			writer.writeByte(stored.id);
+			writer.writeByte(recipient.lastClientMessageId);
+			writer.writeQuadword(recipient.receivedClientMessages);
+			writer.writeNybble(stored.username.size() - 1);
+			writer.writeString(stored.username);
+			writer.writeDeclet(stored.text.size());
+			writer.writeString(stored.text);
+
+			send_packet(recipient.address, writer.getBuffer());
 		}
 	};
 } // namespace protocol

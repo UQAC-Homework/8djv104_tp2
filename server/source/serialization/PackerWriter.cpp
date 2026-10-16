@@ -1,115 +1,68 @@
 #include "../../include/serialization/PackerWriter.h"
 
 #include <stdexcept>
-/*
-/// Gets the buffer of the writer
-    pub fn buffer(&self)
-->
-&
-[u8]
+#include <vector>
+#include "../../include/serialization/WriteHelper.h"
 
-
+std::vector<uint8_t> PacketWriter::getBuffer() const
 {
-        &self.buffer[..self.length / 8]
-    }
-
-/// Checks if the writer can write the given amount of bits
-fn can_write(&self, size: usize
-)
-->
-bool
-{
-	self.offset + size <= self.length
+	return buffer;
 }
 
-/// Writes the given nybble
-    pub fn write_nybble(&mut self, value: u8
-)
- {
-        if !self.can_write(4) {
-            panic!("Cannot write a nybble to the buffer.")
-        }
-
-        // Truncate the input
-        let value = value & 0b1111;
-
-        let remaining_bits = self.offset % 4;
-        let is_upper = self.offset % 8 == 0;
-        let position = self.offset / 8;
-
-        // If on two bytes, split
-        if remaining_bits > 0 {
-            let bits_to_write = 4 - remaining_bits;
-
-            self.buffer[position] |= value >> bits_to_write;
-            self.buffer[position + 1] |= value << bits_to_write;
-        }
-        // If on upper of byte, shift
-        else if is_upper {
-            self.buffer[position] |= value << 4;
-        }
-        // If on lower of byte, write
-        else {
-            self.buffer[position] |= value;
-        }
-
-        self.offset += 4;
-    }
-
-/// Writes the given byte
-    pub fn write_byte(&mut self, value: u8
-)
- {
-        if !self.can_write(8) {
-            panic!("Cannot write a byte to the buffer.")
-        }
-
-        let remaining_bits = self.offset % 8;
-        let position = self.offset / 8;
-
-        // If on two bytes, split
-        if remaining_bits > 0 {
-            let bits_to_write = 8 - remaining_bits;
-
-            self.buffer[position] |= value >> bits_to_write;
-            self.buffer[position + 1] |= value << bits_to_write;
-        }
-        // If on whole byte, write
-        else {
-            self.buffer[position] |= value;
-        }
-
-        self.offset += 8;
-    }*/
-
-bool PackerWriter::canWrite(const unsigned long size) const
+bool PacketWriter::canWrite(const std::size_t size) const
 {
+	return offset + size <= MAXIMUM_PACKET_SIZE * 8;
 }
 
-PackerWriter::PackerWriter(unsigned char buffer[], unsigned long length) : buffer(buffer), length(0)
+void PacketWriter::writeNybble(const uint8_t value)
 {
+	if (!canWrite(4))
+		throw std::overflow_error("Cannot write a nybble to the buffer.");
+
+	writeVariableU8(buffer, offset, value & 0b1111, 4);
 }
 
-void PackerWriter::getBuffer()
+void PacketWriter::writeSextet(const uint8_t value)
 {
+	if (!canWrite(6))
+		throw std::overflow_error("Cannot write a sextet to the buffer.");
+
+	writeVariableU8(buffer, offset, value & 0b111111, 6);
 }
 
-void PackerWriter::writeNybble(unsigned char value)
+void PacketWriter::writeByte(const uint8_t value)
 {
-	if (!this->canWrite(4))
-	{
-		throw std::runtime_error(
-			"Cannot write a nybble to the buffer."
-		);
-	}
+	if (!canWrite(8))
+		throw std::overflow_error("Cannot write a byte to the buffer.");
+
+	writeVariableU8(buffer, offset, value, 8);
 }
 
-void PackerWriter::writeByte(unsigned char value)
+void PacketWriter::writeDeclet(const uint16_t value)
 {
-	if (!this->canWrite(8))
-	{
-		throw std::runtime_error(
-			"Cannot write a byte to the buffer."
-		);
-	}
+	if (!canWrite(10))
+		throw std::overflow_error("Cannot write a declet to the buffer.");
+
+	writeVariableU16(buffer, offset, value, 10);
+}
+
+void PacketWriter::writeQuadword(const uint64_t value)
+{
+	if (!canWrite(64))
+		throw std::overflow_error("Cannot write a quadword to the buffer.");
+
+	writeVariableU64(buffer, offset, value, 64);
+}
+
+void PacketWriter::writeString(const std::string& s)
+{
+	const std::size_t valueLength = s.size();
+
+	if (!canWrite(valueLength * 8))
+		throw std::overflow_error(
+			"Cannot write a string of " + std::to_string(valueLength) +
+			" characters to the buffer.");
+
+	for (const char c : s)
+		writeByte(static_cast<uint8_t>(c));
 }

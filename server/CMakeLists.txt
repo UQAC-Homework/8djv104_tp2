@@ -15,4 +15,6 @@ add_executable(server
         source/serialization/PacketReader.cpp
         source/serialization/PackerWriter.cpp
         include/serialization/PackerWriter.h
-        main.cpp)
+        include/network/packets/types.h
+        include/serialization/WriteHelper.h
+        source/serialization/WriteHelper.cpp)
