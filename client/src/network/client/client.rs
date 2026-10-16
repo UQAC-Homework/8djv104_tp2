@@ -26,6 +26,8 @@ use crate::log_debug;
 use crate::models::message::Message;
 use crate::models::message_history::MessageHistory;
 use crate::models::username::Username;
+use crate::network::client::event_queue::EventQueue;
+use crate::network::client::packet_queue::PacketQueue;
 use crate::network::other::{Liveness, Session, State};
 use crate::network::packets::connection_accepted::ConnectionAcceptedPacket;
 use crate::network::packets::connection_closed::ConnectionClosedPacket;
@@ -36,13 +38,10 @@ use crate::network::packets::heartbeat_request::HeartbeatRequestPacket;
 use crate::network::packets::message_broadcast::MessageBroadcastPacket;
 use crate::network::packets::message_request::MessageRequestPacket;
 use crate::network::packets::message_submit::MessageSubmitPacket;
-use crate::network::packets::packet::{
-    NetworkPacket, Packet as Packet2, decode_packet, encode_packet,
-};
+use crate::network::packets::packet::{NetworkPacket, Packet, decode_packet};
 use crate::network::reliability::{Arrival, SendHistory};
 use crate::time::repeater::Repeater;
 use crate::time::timeout::Timeout;
-use std::collections::VecDeque;
 use std::time::Instant;
 
 pub struct Client {
@@ -58,8 +57,9 @@ pub struct Client {
 
     /// The latest usable report received from the server.
     latest_server_history: MessageHistory,
-    outbox: VecDeque<Vec<u8>>,
-    events: VecDeque<UserEvent>,
+
+    pub packet_queue: PacketQueue,
+    pub event_queue: EventQueue,
 }
 
 impl Client {
@@ -72,8 +72,8 @@ impl Client {
             server_history: MessageHistory::EMPTY,
             client_history: SendHistory::new(),
             latest_server_history: MessageHistory::EMPTY,
-            outbox: VecDeque::new(),
-            events: VecDeque::new(),
+            packet_queue: PacketQueue::new(),
+            event_queue: EventQueue::new(),
         }
     }
 
@@ -103,7 +103,8 @@ impl Client {
             panic!("Client cannot connect without being offline.")
         }
 
-        // A new connection is a new session: both message streams restart.
+        log_debug!("Connecting to server...");
+
         self.server_history = MessageHistory::EMPTY;
         self.client_history = SendHistory::new();
         self.latest_server_history = MessageHistory::EMPTY;
@@ -143,7 +144,7 @@ impl Client {
             State::Online(session) => {
                 self.transmit(&ConnectionClosedPacket::close_session(&session));
                 self.state = State::Offline;
-                self.events.push_back(UserEvent::disconnect_by_user());
+                self.event_queue.push(UserEvent::disconnect_by_user());
             }
             State::Connecting { .. } => self.state = State::Offline,
             State::Offline => {}
@@ -176,11 +177,11 @@ impl Client {
                         inactivity_timeout: Timeout::new(INACTIVITY_WARNING),
                     },
                 });
-                self.events.push_back(UserEvent::Connected {});
+                self.event_queue.push(UserEvent::Connected {});
             }
             NetworkPacket::ConnectionRejected(_) => {
                 self.state = State::Offline;
-                self.events.push_back(UserEvent::Rejected);
+                self.event_queue.push(UserEvent::Rejected);
             }
             _ => {}
         }
@@ -195,7 +196,7 @@ impl Client {
                 }
 
                 self.state = State::Offline;
-                self.events.push_back(UserEvent::disconnected_by_server());
+                self.event_queue.push(UserEvent::disconnected_by_server());
             }
             NetworkPacket::MessageBroadcast(MessageBroadcastPacket {
                 message_identifier,
@@ -212,8 +213,8 @@ impl Client {
                 // Duplicates carry fresh reports too.
                 self.process_report(message_history);
                 if arrival != Arrival::Ignored {
-                    self.events
-                        .push_back(UserEvent::new_message(username, message));
+                    self.event_queue
+                        .push(UserEvent::new_message(username, message));
                 }
             }
             NetworkPacket::MessageRequest(MessageRequestPacket {
@@ -308,7 +309,7 @@ impl Client {
             } => {
                 if timeout_timer.has_expired() {
                     self.state = State::Offline;
-                    self.events.push_back(UserEvent::Timeout);
+                    self.event_queue.push(UserEvent::Timeout);
                 } else if retry_repeater.pool() {
                     self.state = State::Connecting {
                         timeout_timer,
@@ -336,25 +337,13 @@ impl Client {
                         let packet = ConnectionClosedPacket::close_session(session);
                         self.transmit(&packet);
                         self.state = State::Offline;
-                        self.events.push_back(UserEvent::disconnected_by_timeout());
+                        self.event_queue.push(UserEvent::disconnected_by_timeout());
                     } else if heartbeat_repeater.pool() {
                         self.send_heartbeat();
                     }
                 }
             },
         }
-    }
-
-    // ---- output queues -----------------------------------------------------
-
-    /// Next datagram to send to the server.
-    pub fn poll_transmit(&mut self) -> Option<Vec<u8>> {
-        self.outbox.pop_front()
-    }
-
-    /// Next event to show to the user.
-    pub fn poll_event(&mut self) -> Option<UserEvent> {
-        self.events.pop_front()
     }
 
     // ---- helpers -----------------------------------------------------------
@@ -368,8 +357,8 @@ impl Client {
 
     /// Queues a datagram. Sending restarts `INACTIVITY_WARNING`, but only
     /// while that timer is still running (i.e. not while waiting).
-    fn transmit<P: Packet2>(&mut self, packet: &P) {
-        self.outbox.push_back(encode_packet(packet));
+    fn transmit<P: Packet>(&mut self, packet: &P) {
+        self.packet_queue.push(packet);
 
         match &mut self.state {
             State::Online(Session {
@@ -388,7 +377,7 @@ impl Client {
             username: self.username.clone(),
         };
 
-        self.outbox.push_back(encode_packet(&packet));
+        self.packet_queue.push(&packet);
     }
 
     fn send_heartbeat(&mut self) {

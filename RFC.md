@@ -748,7 +748,7 @@ When the server creates the session, the server **MUST** start a timer for `CLIE
 
 When the timer for `CLIENT_INACTIVITY_WARNING` expires, the server **MUST** start a timer for `HEARTBEAT_REQUEST_INTERVAL` and for `CLIENT_INACTIVITY_TIMEOUT`.
 
-When the timer for `HEARTBEAT_REQUEST_INTERVAL` expires, the server **MUST** send a `HEARTBEAT_REQUEST`. The server **MUST** reset the timer for `HEARTBEAT_REQUEST_INTERVAL`.
+When the timer for `HEARTBEAT_REQUEST_INTERVAL` expires, the server **MUST** send a `HEARTBEAT_REQUEST` packet. The server **MUST** reset the timer for `HEARTBEAT_REQUEST_INTERVAL`.
 
 If the server receives a `HEARTBEAT_BROADCAST` packet or any valid packet, the server **MUST** stop the timers for `HEARTBEAT_REQUEST_INTERVAL` and `CLIENT_INACTIVITY_TIMEOUT`. The server **MUST** reset the timer for `CLIENT_INACTIVITY_WARNING`.
 

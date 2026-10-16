@@ -476,7 +476,7 @@ namespace protocol
 					}
 					if (s.suspicious && idle >= std::chrono::seconds(3))
 					{
-						send_user_packet(s.address, CONNECTION_CLOSED, s.userId);
+						send_user_packet(s.address, CONNECTION_CLOSED, 0b000000);
 						std::cout << s.username << " timed out\n";
 						remove.push_back(id);
 						continue;

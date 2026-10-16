@@ -5,6 +5,7 @@
 //! client's next timer.
 
 use network::other::DisconnectReason;
+use rand::random_range;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::io::{self, BufRead, Write};
@@ -82,7 +83,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .next()
         .ok_or("could not resolve the server address")?;
 
-    match run(username, server) {
+    match run(username, server, arguments.packet_drop_rate) {
         Ok(code) => std::process::exit(code),
         Err(e) => {
             log_error!("Error while running the client: {e}");
@@ -91,14 +92,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn run(username: Username, address: SocketAddr) -> Result<i32, Box<dyn Error>> {
+fn run(
+    username: Username,
+    address: SocketAddr,
+    packet_drop_rate: f32,
+) -> Result<i32, Box<dyn Error>> {
     let bind_address = match address.is_ipv4() {
         true => "0.0.0.0:0",
         false => "[::]:0",
     };
 
     let socket = UdpSocket::bind(bind_address)?;
-    // A connected UDP socket only receives datagrams from the server.
+
     socket.connect(address)?;
 
     let (tx, rx) = mpsc::channel();
@@ -107,11 +112,6 @@ fn run(username: Username, address: SocketAddr) -> Result<i32, Box<dyn Error>> {
 
     let client_identifier = random_client_id();
     let mut client = Client::new(username, client_identifier);
-    log_info!(
-        "* connecting to {} (client id {:#x})...",
-        address,
-        client_identifier
-    );
     client.connect();
 
     let mut exit_code = 0;
@@ -130,7 +130,7 @@ fn run(username: Username, address: SocketAddr) -> Result<i32, Box<dyn Error>> {
             let _ = client.send_message(message);
         }
 
-        while let Some(event) = client.poll_event() {
+        while let Some(event) = client.event_queue.pull() {
             match show(&event)? {
                 Some(code) => {
                     exit_code = code;
@@ -138,7 +138,7 @@ fn run(username: Username, address: SocketAddr) -> Result<i32, Box<dyn Error>> {
                 None => {}
             }
         }
-        flush_transmits(&mut client, &socket)?;
+        flush_transmits(&mut client, &socket, packet_drop_rate)?;
         if client.is_offline() {
             break;
         }
@@ -174,11 +174,7 @@ fn run(username: Username, address: SocketAddr) -> Result<i32, Box<dyn Error>> {
                     Err(e) => log_debug!("<- discarded: {e}"),
                 }
 
-                if rand::random_range(0..100) <= 50 {
-                    log_debug!("Packet dropped!");
-                } else {
-                    client.handle_packet(&data);
-                }
+                client.handle_packet(&data);
             }
             Ok(Input::Line(line)) => {
                 let line = line.trim_end_matches('\r');
@@ -203,20 +199,32 @@ fn run(username: Username, address: SocketAddr) -> Result<i32, Box<dyn Error>> {
 
 /// Sends everything the client queued. ICMP "connection refused" errors
 /// surfacing on a connected UDP socket just mean the datagram was lost.
-fn flush_transmits(client: &mut Client, socket: &UdpSocket) -> io::Result<()> {
-    while let Some(datagram) = client.poll_transmit() {
+fn flush_transmits(
+    client: &mut Client,
+    socket: &UdpSocket,
+    packet_drop_rate: f32,
+) -> io::Result<()> {
+    while let Some(datagram) = client.packet_queue.pull() {
         //if let Ok(packet) = decode_packet(&datagram) {
         //log_error!("-> {packet:?}");
         log_debug!("-> {datagram:?}");
         //}
+
+        if random_range(0.0..1.0) <= packet_drop_rate {
+            log_debug!("-X Packet was dropped.");
+            continue;
+        }
+
         match socket.send(&datagram) {
             Ok(_) => {}
-            Err(e)
-                if matches!(
+            Err(e) => {
+                if !matches!(
                     e.kind(),
                     io::ErrorKind::ConnectionRefused | io::ErrorKind::WouldBlock
-                ) => {}
-            Err(e) => return Err(e),
+                ) {
+                    return Err(e);
+                }
+            }
         }
     }
     Ok(())
