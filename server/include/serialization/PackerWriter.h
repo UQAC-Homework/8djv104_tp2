@@ -6,7 +6,7 @@ struct PackerWriter
 {
 private:
 	/// Buffer to write to
-	const unsigned char buffer[1024];
+	unsigned char* buffer;
 
 	/// Length of the buffer in bits
 	const unsigned long length;
@@ -22,7 +22,7 @@ public:
 	explicit PackerWriter(unsigned char buffer[], unsigned long length);
 
 	/// Gets the buffer of the writer
-	void buffer();
+	void getBuffer();
 
 	/// Writes the given nybble
 	void writeNybble(unsigned char value);

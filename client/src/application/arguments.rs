@@ -1,13 +1,15 @@
+use std::net::SocketAddr;
+
 /// Structure used to store the arguments of the application
 pub struct Arguments {
     /// Network address of the server
-    server_address: String,
+    pub server_address: String,
 
     /// Username of the user
-    username: String,
+    pub username: String,
 
     /// Defines if network logs are shown
-    verbose: bool,
+    pub verbose: bool,
 }
 
 // TODO: Add default values

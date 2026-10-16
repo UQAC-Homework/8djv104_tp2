@@ -1,7 +1,7 @@
 #include "../../include/serialization/PackerWriter.h"
 
 #include <stdexcept>
-
+/*
 /// Gets the buffer of the writer
     pub fn buffer(&self)
 ->
@@ -80,7 +80,7 @@ bool
         }
 
         self.offset += 8;
-    }
+    }*/
 
 bool PackerWriter::canWrite(const unsigned long size) const
 {
@@ -90,7 +90,7 @@ PackerWriter::PackerWriter(unsigned char buffer[], unsigned long length) : buffe
 {
 }
 
-void PackerWriter::buffer()
+void PackerWriter::getBuffer()
 {
 }
 

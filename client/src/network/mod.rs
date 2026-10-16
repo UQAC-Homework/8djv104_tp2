@@ -1,3 +1,5 @@
 pub mod serialization;
-pub mod chat_client;
-mod client_state;
+pub mod packets;
+pub mod client;
+pub mod packet;
+pub mod reliability;

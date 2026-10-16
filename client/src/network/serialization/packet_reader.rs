@@ -1,4 +1,4 @@
-use crate::network::serialization::read_helper::{read_variable_u8, read_variable_u16, read_variable_u64};
+use crate::network::serialization::read_helper::{read_variable_u16, read_variable_u64, read_variable_u8};
 
 /// Structure used to read packets from a binary format
 pub struct PacketReader<'a> {

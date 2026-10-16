@@ -288,10 +288,10 @@ Request to establish a connection.
 #### Format
 
 ```
- 0      7 8                11 12    15
-+--------+-------------------+--------+
-|  Type  | Client Identifier | Length |
-+--------+-------------------+--------+
+ 0      7 8                11 12             15
++--------+-------------------+-----------------+
+|  Type  | Client Identifier | Username Length |
++--------+-------------------+-----------------+
 
  16     143
 +----------+
@@ -317,25 +317,25 @@ Example of a packet:
 ```
 01					Type
 C5					Client Identifier + Length
-50 6C 51 79 65 72	Username
+50 6C 61 79 65 72	Username
 ```
 
 Example of how the username `Player` is found:
 
 ```
-Bytes: 01 C5 50 6C 51 79 65 72
-Nybbles: 0 1 C 5 5 0 6 C 5 1 7 9 6 5 7 2
+Bytes: 01 C5 50 6C 61 79 65 72
+Nybbles: 0 1 C 5 5 0 6 C 6 1 7 9 6 5 7 2
 Grouped Nybbles:
 	- Type: 0 1
 	- Client Identifier: C
 	- Length: 5
-	- Username: 5 0 6 c 6 1 7 9 6 5 7 2
+	- Username: 5 0 6 C 6 1 7 9 6 5 7 2
 
 Type: 1
 Client Identifier: 12
 Length: 5
 Username:
-	5 0 6 c 6 1 7 9 6 5 7 2
+	5 0 6 C 6 1 7 9 6 5 7 2
 	|/  |/  |/  |/  |/  |/
 	50  6c  61  79  65  72
 	P   l   a   y   e   r
@@ -397,7 +397,7 @@ Exchange to notify that the connection is closed.
 
 | Name            | Size             | Description                                                    |
 | --------------- | ---------------- | -------------------------------------------------------------- |
-| Type            | 8 bits, unsigned | Field defined in the header `PACKET_TYPE`. **MUST** be `0x02`. |
+| Type            | 8 bits, unsigned | Field defined in the header `PACKET_TYPE`. **MUST** be `0x04`. |
 | User Identifier | 6 bits, unsigned | Field defined in the header `USER_AUTHENTICATION`.             |
 
 ### `MESSAGE_SUBMIT`
@@ -508,7 +508,7 @@ Request to notify of the health status of the client.
 
 | Name                    | Size              | Description                                                    |
 | ----------------------- | ----------------- | -------------------------------------------------------------- |
-| Type                    | 8 bits, unsigned  | Field defined in the header `PACKET_TYPE`. **MUST** be `0x11`. |
+| Type                    | 8 bits, unsigned  | Field defined in the header `PACKET_TYPE`. **MUST** be `0x20`. |
 | User Identifier         | 6 bits, unsigned  | Field defined in the header `USER_AUTHENTICATION`.             |
 | Last Message Identifier | 8 bits, unsigned  | Field defined in the header `MISSING_MESSAGES`.                |
 | Received Messages       | 64 bits, unsigned | Field defined in the header `MISSING_MESSAGES`.                |
