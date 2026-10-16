@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 /// Structure used to represent a timeout after a given duration
 #[derive(Debug, Clone, Copy)]
 pub struct Timeout {
-    start: Instant,
-    duration: Duration,
+    /// Time after which the timeout is expired
+    deadline: Instant,
 }
 
 impl Timeout {
@@ -13,22 +13,17 @@ impl Timeout {
         let now: Instant = Instant::now();
 
         Self {
-            start: now,
-            duration,
+            deadline: now + duration,
         }
     }
 
-    /// Checks if the given timeout has expired
+    /// Checks if the timeout has expired
     pub fn has_expired(&self) -> bool {
-        self.start.elapsed() >= self.duration
+        Instant::now() > self.deadline
     }
 
     /// Gets the remaining duration of the timeout
     pub fn remaining(&self) -> Duration {
-        if self.has_expired() {
-            return Duration::ZERO;
-        }
-
-        self.duration.checked_sub(self.start.elapsed()).unwrap_or(Duration::ZERO)
+        self.deadline.saturating_duration_since(Instant::now())
     }
 }

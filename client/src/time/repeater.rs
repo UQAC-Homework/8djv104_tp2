@@ -3,35 +3,45 @@ use std::time::{Duration, Instant};
 /// Structure used to control a repeating trigger
 #[derive(Clone, Copy, Debug)]
 pub struct Repeater {
-    start: Instant,
     interval: Duration,
+    next: Instant,
 }
 
 impl Repeater {
     /// Creates a repeater with the given interval
     pub fn new(interval: Duration) -> Self {
+        assert!(!interval.is_zero(), "interval must be non-zero");
+
+        let now = Instant::now();
+
         Self {
             interval,
-            start: Instant::now(),
+            next: now + interval,
         }
     }
 
     /// Checks if a trigger is due
-    pub fn is_due(&self) -> bool {
-        self.start.elapsed() >= self.interval
+    pub fn pool(&mut self) -> bool {
+        let now = Instant::now();
+
+        if !self.is_due_at(now) {
+            return false;
+        }
+
+        while self.is_due_at(now) {
+            self.next += self.interval;
+        }
+
+        true
+    }
+
+    /// Checks if a trigger is due at the given instant
+    fn is_due_at(&self, now: Instant) -> bool {
+        now >= self.next
     }
 
     /// Gets the remaining duration until the next trigger
     pub fn remaining(&self) -> Duration {
-        if self.is_due() {
-            return Duration::ZERO;
-        }
-
-        self.interval.checked_sub(self.start.elapsed()).unwrap_or(Duration::ZERO) 
-    }
-
-    /// Resets the repeater
-    pub fn reset(&mut self) {
-        self.start = Instant::now();
+        self.next.saturating_duration_since(Instant::now())
     }
 }

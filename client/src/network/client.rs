@@ -23,7 +23,7 @@ use crate::application::constants::{
 };
 use crate::application::events::event::UserEvent;
 use crate::models::username::Username;
-use crate::network::other::{DisconnectReason, Liveness, NotOnline, Session, State};
+use crate::network::other::{Liveness, NotOnline, Session, State};
 use crate::network::packet::{MessageText, MissingMessages};
 use crate::network::packets::connection_accepted::ConnectionAcceptedPacket;
 use crate::network::packets::connection_closed::ConnectionClosedPacket;
@@ -132,7 +132,7 @@ impl Client {
     pub fn disconnect(&mut self, now: Instant) {
         match self.state {
             State::Online(session) => {
-                self.transmit(now, &ConnectionClosedPacket::close_session(session));
+                self.transmit(now, &ConnectionClosedPacket::close_session(session.user_id));
                 self.state = State::Offline;
                 self.events
                     .push_back(UserEvent::disconnect_by_user());
@@ -324,8 +324,7 @@ impl Client {
                 if timeout_timer.has_expired() {
                     self.state = State::Offline;
                     self.events.push_back(UserEvent::Timeout);
-                } else if retry_repeater.is_due() {
-                    retry_repeater.reset();
+                } else if retry_repeater.pool() {
                     self.state = State::Connecting {
                         timeout_timer,
                         retry_repeater,
@@ -333,28 +332,27 @@ impl Client {
                     self.send_connection_request();
                 }
             }
-            State::Online(mut session) => match session.liveness {
-                Liveness::Idle { warn_at } if now >= warn_at => {
+            State::Online(ref mut session) => match &mut session.liveness {
+                Liveness::Idle { warn_at } if now >= *warn_at => {
                     // INACTIVITY_WARNING expired: start heartbeating.
                     session.liveness = Liveness::Waiting {
                         heartbeat_repeater: Repeater::new(HEARTBEAT_INTERVAL),
                         server_timeout_timer: Timeout::new(SERVER_INACTIVITY_TIMEOUT),
                     };
-                    self.state = State::Online(session);
+                    self.state = State::Online(*session);
                     self.send_heartbeat(now);
                 }
                 Liveness::Waiting {
                     server_timeout_timer,
-                    mut heartbeat_repeater,
+                    heartbeat_repeater,
                 } => {
                     if server_timeout_timer.has_expired() {
-                        self.transmit(now, &ConnectionClosedPacket::close_session(session));
+                        let user_identifier = session.user_id;
+                        self.transmit(now, &ConnectionClosedPacket::close_session(user_identifier));
                         self.state = State::Offline;
                         self.events
                             .push_back(UserEvent::disconnected_by_timeout());
-                    } else if heartbeat_repeater.is_due() {
-                        heartbeat_repeater.reset();
-
+                    } else if heartbeat_repeater.pool() {
                         self.send_heartbeat(now);
                     }
                 }

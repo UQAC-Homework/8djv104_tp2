@@ -30,9 +30,9 @@ impl Packet for ConnectionClosedPacket {
 
 impl ConnectionClosedPacket {
     /// Creates a closing packet to close the given session
-    pub fn close_session(session: Session) -> Self {
+    pub fn close_session(user_identifier: u8) -> Self {
         Self {
-            user_identifier: session.user_id,
+            user_identifier
         }
     }
 }
