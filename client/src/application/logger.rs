@@ -37,7 +37,7 @@ fn is_enabled(level: Level) -> bool {
     level as u8 >= MIN_LEVEL.load(Ordering::Relaxed)
 }
 
-pub fn log(level: Level, target: &str, args: Arguments) {
+pub fn log(level: Level, args: Arguments) {
     if !is_enabled(level) {
         return;
     }
@@ -47,7 +47,7 @@ pub fn log(level: Level, target: &str, args: Arguments) {
         .map(|d| d.as_secs_f64())
         .unwrap_or(0.0);
 
-    let line = format!("[{secs:.3}] [{:<5}] {target}: {args}", level);
+    let line = format!("[{secs:.3}] [{:<5}] {args}", level.to_string());
 
     if level == Level::Error {
         eprintln!("{}", line);
@@ -59,27 +59,27 @@ pub fn log(level: Level, target: &str, args: Arguments) {
 #[macro_export]
 macro_rules! log_debug {
     ($($arg:tt)*) => {
-        $crate::logger::log($crate::logger::Level::Debug, module_path!(), format_args!($($arg)*))
+        $crate::logger::log($crate::logger::Level::Debug, format_args!($($arg)*))
     };
 }
 
 #[macro_export]
 macro_rules! log_info {
     ($($arg:tt)*) => {
-        $crate::logger::log($crate::logger::Level::Info, module_path!(), format_args!($($arg)*))
+        $crate::logger::log($crate::logger::Level::Info, format_args!($($arg)*))
     };
 }
 
 #[macro_export]
 macro_rules! log_warn {
     ($($arg:tt)*) => {
-        $crate::logger::log($crate::logger::Level::Warn, module_path!(), format_args!($($arg)*))
+        $crate::logger::log($crate::logger::Level::Warn, format_args!($($arg)*))
     };
 }
 
 #[macro_export]
 macro_rules! log_error {
     ($($arg:tt)*) => {
-        $crate::logger::log($crate::logger::Level::Error, module_path!(), format_args!($($arg)*))
+        $crate::logger::log($crate::logger::Level::Error, format_args!($($arg)*))
     };
 }
