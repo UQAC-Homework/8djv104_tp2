@@ -123,7 +123,7 @@ impl SendHistory {
             .filter_map(|age| {
                 let id = last_sent.wrapping_sub(age);
 
-                if history.is_missing(last_sent) {
+                if history.is_missing(id) {
                     self.get(id).map(|text| (id, text))
                 } else {
                     None
