@@ -1,7 +1,7 @@
 #include "../../../include/network/serialization/PacketReader.h"
-#include "../../../include/network/serialization/ReadHelper.h"
 
 #include <stdexcept>
+#include "../../../include/network/serialization/read_helper.h"
 
 PacketReader::PacketReader(const uint8_t* buffer, const std::size_t length)
 	: buffer(buffer), length(length * 8)

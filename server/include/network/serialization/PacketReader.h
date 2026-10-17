@@ -51,7 +51,7 @@ private:
 	std::size_t offset = 0;
 
 	/// Checks if the reader can read the given amount of bits
-	[[nodiscard]] bool canRead(std::size_t size) const;
+	[[nodiscard]] inline bool canRead(std::size_t size) const;
 };
 
 #endif //SERVER_PACKETREADER_H

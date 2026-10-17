@@ -47,6 +47,9 @@ private:
 
 	/// Checks if the writer can write the given amount of bits
 	[[nodiscard]] bool canWrite(std::size_t size) const;
+
+	/// Resizes the buffer to be able to write the given amount of bits
+	void resizeFor(std::size_t size);
 };
 
 

@@ -15,10 +15,8 @@ add_executable(server
         source/network/serialization/PacketWriter.cpp
         include/network/serialization/PacketWriter.h
         include/network/packets/types.h
-        include/network/serialization/WriteHelper.h
-        source/network/serialization/WriteHelper.cpp
-        include/network/serialization/ReadHelper.h
-        source/network/serialization/ReadHelper.cpp
+        include/network/serialization/write_helper.h
+        include/network/serialization/read_helper.h
         source/network/SessionManager.cpp
         include/network/SessionManager.h
         source/network/Server.cpp
