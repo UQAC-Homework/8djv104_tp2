@@ -20,12 +20,12 @@ impl Packet for MessageBroadcastPacket {
     }
 
     fn deserialize(reader: &mut PacketReader) -> Result<Self, FieldError> {
-        let message_id = reader.read_byte();
+        let message_id = reader.read_byte()?;
         let message_history = MessageHistory::deserialize(reader)?;
-        let username_length = reader.read_nybble() + 1;
-        let username = reader.read_string(username_length as usize);
-        let message_length = reader.read_declet();
-        let message = reader.read_string(message_length as usize);
+        let username_length = reader.read_nybble()? + 1;
+        let username = reader.read_string(username_length as usize)?;
+        let message_length = reader.read_declet()?;
+        let message = reader.read_string(message_length as usize)?;
 
         Ok(Self {
             message_identifier: message_id,

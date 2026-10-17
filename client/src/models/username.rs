@@ -43,10 +43,10 @@ impl Username {
 
     /// Deserializes this username into the given writer
     pub fn deserialize(reader: &mut PacketReader) -> Result<Username, FieldError> {
-        let length_minus_one = reader.read_nybble() as usize;
+        let length_minus_one = reader.read_nybble()? as usize;
         let length = length_minus_one + 1;
 
-        let raw_username = reader.read_string(length);
+        let raw_username = reader.read_string(length)?;
         Username::new(raw_username)
     }
 }

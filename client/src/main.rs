@@ -26,7 +26,6 @@ use crate::application::logger::Level;
 use crate::models::message::Message;
 use crate::models::username::Username;
 use crate::network::client::client::Client;
-use crate::network::packets::packet::decode_packet;
 
 const USAGE: &str = "\
 Usage: client <username> <server_ip> <server_port> [--loss P] [--verbose]
@@ -169,11 +168,6 @@ fn run(
 
         match input {
             Ok(Input::Datagram(data)) => {
-                match decode_packet(&data) {
-                    Ok(packet) => log_debug!("<- {packet:?}"),
-                    Err(e) => log_debug!("<- discarded: {e}"),
-                }
-
                 client.handle_packet(&data);
             }
             Ok(Input::Line(line)) => {

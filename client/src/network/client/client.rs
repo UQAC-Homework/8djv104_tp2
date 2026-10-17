@@ -156,9 +156,17 @@ impl Client {
     /// Processes one received datagram. Malformed packets and unsupported
     /// types are discarded, as the RFC requires.
     pub fn handle_packet(&mut self, datagram: &[u8]) {
-        let Ok(packet) = decode_packet(datagram) else {
+        let packet_result = decode_packet(datagram);
+
+        if packet_result.is_err() {
+            let error = packet_result.err().unwrap();
+            log_debug!("<- Packet discarded: {error}");
             return;
-        };
+        }
+        
+        let packet = packet_result.unwrap();
+
+        log_debug!("<- {packet:?}");
 
         match self.state {
             State::Offline => {}

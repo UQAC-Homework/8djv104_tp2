@@ -19,7 +19,7 @@ impl Packet for MessageRequestPacket {
     }
 
     fn deserialize(reader: &mut PacketReader) -> Result<Self, FieldError> {
-        let user_id = reader.read_sextet();
+        let user_id = reader.read_sextet()?;
         let message_history = MessageHistory::deserialize(reader)?;
 
         Ok(Self {

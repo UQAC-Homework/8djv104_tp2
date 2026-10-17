@@ -34,13 +34,13 @@ pub fn encode_packet<P: Packet>(packet: &P) -> Vec<u8> {
     writer.buffer()
 }
 
-pub fn decode_packet(datagram: &[u8]) -> Result<NetworkPacket, DecodeError> {
+pub fn decode_packet(datagram: &[u8]) -> Result<NetworkPacket, FieldError> {
     let mut reader = PacketReader::new(datagram);
 
-    let packet_type = reader.read_byte();
+    let packet_type = reader.read_byte()?;
 
     let packet = match packet_type {
-        0x00 => return Err(DecodeError::ReservedType),
+        0x00 => return Err(FieldError::from(DecodeError::ReservedType)),
 
         ConnectionAcceptedPacket::MAGIC => {
             NetworkPacket::ConnectionAccepted(ConnectionAcceptedPacket::deserialize(&mut reader)?)
@@ -73,7 +73,7 @@ pub fn decode_packet(datagram: &[u8]) -> Result<NetworkPacket, DecodeError> {
             NetworkPacket::MessageSubmit(MessageSubmitPacket::deserialize(&mut reader)?)
         }
 
-        other => return Err(DecodeError::UnknownType(other)),
+        other => return Err(FieldError::from(DecodeError::UnknownType(other))),
     };
 
     Ok(packet)

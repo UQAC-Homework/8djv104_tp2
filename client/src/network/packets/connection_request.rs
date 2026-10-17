@@ -19,7 +19,7 @@ impl Packet for ConnectionRequestPacket {
     }
 
     fn deserialize(reader: &mut PacketReader) -> Result<Self, FieldError> {
-        let client_identifier = reader.read_nybble();
+        let client_identifier = reader.read_nybble()?;
         let username = Username::deserialize(reader)?;
 
         Ok(Self {

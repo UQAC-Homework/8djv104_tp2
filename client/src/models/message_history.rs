@@ -24,8 +24,8 @@ impl MessageHistory {
 
     /// Deserializes a history from the given reader
     pub fn deserialize(reader: &mut PacketReader) -> Result<Self, FieldError> {
-        let last_message_identifier = reader.read_byte();
-        let received_messages = reader.read_quadword();
+        let last_message_identifier = reader.read_byte()?;
+        let received_messages = reader.read_quadword()?;
 
         Ok(Self {
             last_message_identifier,

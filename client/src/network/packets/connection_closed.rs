@@ -22,7 +22,7 @@ impl Packet for ConnectionClosedPacket {
     }
 
     fn deserialize(reader: &mut PacketReader) -> Result<Self, FieldError> {
-        let user_id = reader.read_sextet();
+        let user_id = reader.read_sextet()?;
 
         Ok(Self {
             user_identifier: user_id,
