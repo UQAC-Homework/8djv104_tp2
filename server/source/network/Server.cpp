@@ -165,7 +165,7 @@ void Server::handle_connection_closed(PacketReader& reader)
 
 	sessionManager.delete_session(user_identifier);
 
-	std::cout << "User with the ID " << user_identifier << " has been disconnected." << std::endl;
+	std::cout << "User with the ID " << std::to_string(user_identifier) << " has been disconnected." << std::endl;
 }
 
 bool Server::identify_client_message(Session& s, const uint8_t id)
