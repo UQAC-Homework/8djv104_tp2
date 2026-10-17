@@ -40,7 +40,7 @@ struct Session
 	std::chrono::steady_clock::time_point nextHeartbeatRequest = std::chrono::steady_clock::now();
 
 	/// Refresh the session's activity
-	void refresh();
+	void refresh(bool unbind_client_identifier);
 
 	/// Adds the given message to the history
 	[[nodiscard]] uint8_t add_message(const std::string& sender_name, const std::string& message);

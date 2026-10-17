@@ -158,7 +158,7 @@ namespace
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-Server::Server(const uint16_t port, Logger& logger, LossSimulator& loss_simulator) : port(port), logger(logger), lossSimulator(loss_simulator)
+Server::Server(const uint16_t port, Logger& logger, LossSimulator& lossSimulator) : port(port), logger(logger), lossSimulator(lossSimulator)
 {
 	initialize_socket();
 	socket = create_socket(port);
@@ -191,7 +191,7 @@ void Server::run()
 // Sending
 // ---------------------------------------------------------------------------
 
-void Server::send_packet(const sockaddr_in& to, const std::vector<uint8_t>& bytes)
+void Server::send_packet(const sockaddr_in& to, const std::vector<uint8_t>& bytes) const
 {
 	if (lossSimulator.should_drop())
 	{
@@ -203,12 +203,12 @@ void Server::send_packet(const sockaddr_in& to, const std::vector<uint8_t>& byte
 	             reinterpret_cast<const sockaddr*>(&to), sizeof(to));
 }
 
-void Server::send_type(const sockaddr_in& to, const uint8_t type)
+void Server::send_type(const sockaddr_in& to, const uint8_t type) const
 {
 	send_packet(to, std::vector{type});
 }
 
-void Server::send_user_packet(const sockaddr_in& to, const uint8_t type, const uint8_t userId)
+void Server::send_user_packet(const sockaddr_in& to, const uint8_t type, const uint8_t userId) const
 {
 	PacketWriter writer;
 	writer.writeByte(type);
@@ -218,7 +218,7 @@ void Server::send_user_packet(const sockaddr_in& to, const uint8_t type, const u
 }
 
 /// HEARTBEAT_RECEIVED and HEARTBEAT_REQUEST: our receive state for this client.
-void Server::send_receive_status(const sockaddr_in& to, const uint8_t type, const Session& s)
+void Server::send_receive_status(const sockaddr_in& to, const uint8_t type, const Session& s) const
 {
 	PacketWriter writer;
 	writer.writeByte(type);
@@ -228,7 +228,7 @@ void Server::send_receive_status(const sockaddr_in& to, const uint8_t type, cons
 	send_packet(to, writer.getBuffer());
 }
 
-void Server::send_message_request(const Session* recipient)
+void Server::send_message_request(const Session* recipient) const
 {
 	if (recipient == nullptr)
 		return;
@@ -246,7 +246,7 @@ void Server::send_message_broadcast(
 	const Session* recipient,
 	const uint8_t message_identifier,
 	const std::string& username,
-	const std::string& message)
+	const std::string& message) const
 {
 	if (recipient == nullptr)
 		return;
@@ -272,7 +272,7 @@ void Server::send_message_broadcast(
 }
 
 /// Stores the message in the recipient's history, then sends it.
-void Server::send_new_broadcast(Session* recipient, const std::string& username, const std::string& message)
+void Server::send_new_broadcast(Session* recipient, const std::string& username, const std::string& message) const
 {
 	if (recipient == nullptr)
 		return;
@@ -350,7 +350,7 @@ void Server::handle_connection_request(PacketReader& reader, const sockaddr_in& 
 	if (existing_session != nullptr)
 	{
 		logger.log_debug("Refreshing session of client=" + std::to_string(existing_session->clientId));
-		existing_session->refresh();
+		existing_session->refresh(false);
 		logger.log_debug("Sending 'CONNECTION_ACCEPTED' to user=" + std::to_string(existing_session->userId));
 		send_user_packet(peer, CONNECTION_ACCEPTED, existing_session->userId);
 		return;
@@ -410,7 +410,7 @@ void Server::handle_heartbeat(PacketReader& reader, const sockaddr_in& peer)
 		return;
 	}
 
-	session->refresh();
+	session->refresh(true);
 	process_peer_ack(session, last, received);
 
 	logger.log_debug("Sending 'HEARTBEAT_RECEIVED' to user=" + std::to_string(user_identifier));
@@ -433,7 +433,7 @@ void Server::handle_message_request(PacketReader& reader)
 		return;
 	}
 
-	session->refresh();
+	session->refresh(true);
 	process_peer_ack(session, last, received);
 }
 
@@ -464,7 +464,7 @@ void Server::handle_message_submit(PacketReader& reader)
 		return;
 	}
 
-	sender->refresh();
+	sender->refresh(true);
 
 	// -- Reliability ---------------------------------------------------------
 	// Resend what the sender says it missed, even if this packet is a duplicate.
@@ -488,7 +488,7 @@ void Server::handle_message_submit(PacketReader& reader)
 }
 
 /// Resends every broadcast the peer reports as missing, oldest first.
-void Server::process_peer_ack(const Session* session, const uint8_t peerLast, const uint64_t peerBitmap)
+void Server::process_peer_ack(const Session* session, const uint8_t peerLast, const uint64_t peerBitmap) const
 {
 	if (session == nullptr)
 		return;

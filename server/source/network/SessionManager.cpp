@@ -5,10 +5,13 @@
 
 constexpr auto INACTIVITY_TIMEOUT = std::chrono::seconds(3);
 
-void Session::refresh()
+void Session::refresh(const bool unbind_client_identifier)
 {
 	lastPacket = std::chrono::steady_clock::now();
 	suspicious = false;
+	
+	if (unbind_client_identifier)
+		clientId = 0;
 }
 
 uint8_t Session::add_message(const std::string& sender_name, const std::string& message)

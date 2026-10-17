@@ -402,9 +402,6 @@ Exchange to notify that the connection is closed.
 
 ### `MESSAGE_SUBMIT`
 
-> [!IMPORTANT]
-> Redesign
-
 Request to send a message.
 
 #### Format
@@ -999,3 +996,45 @@ sequenceDiagram
 	Server->>Client: CONNECTION_CLOSED
 	Note right of Server: Session removed
 ```
+
+## Questions
+
+This section will go over the questions that were asked in the assignment. Although they were all answered within this document, none were explicitly answer.
+
+### How does server identify a connection?
+
+While connecting, the server uses the network address of the client (IP and port), in addition of the client-provided `Client Identifier`. A `User Identifier` is transmitted to the user, which is used in further packets to identify the connection. As soon as the server receives a packet that confirms the connection was successfully, the `Client Identifier` is unbounded.
+
+### When is the username transmitted? How is it transmitted?
+
+When connecting to the server, the username is transmitted by the `CONNECTION_REQUEST` packet. This is the only time the client needs to transmit its username.
+
+When the server broadcasts a message, the server packages the username of the sender within the `MESSAGE_BROADCAST` packet. The client do not store the username of none of the users.
+
+### What is the size of the message identifier? What happens when it reaches the maximum value?
+
+The size of the field `Message Identifier` is eight (8) bits. This allows to have identifiers ranging from `0` to `255`.
+
+When the field `Message Identifier` reaches `255`, the value is reset to `0`.
+
+### How to interpret the field `Received Messages` on the first packet containing it?
+
+Since the field `Message Identifier` starts at `255`, any message is considered new, including the message with the identifier `0`.
+
+### How is a message found missing outside of `MESSAGE_BROADCAST` and `MESSAGE_SUBMIT`?
+
+A message is found missing by the receipt of a packet containing the header `MISSING_MESSAGES`. Any packet with this header will check for a missing message.
+
+### Are messages delivered in order of emission or in order of receipt?
+
+Messages are delivered to clients in order of receipt. As soon as the server receives a `MESSAGE_SUBMIT`, the server will send a `MESSAGE_BROADCAST` to all clients.
+
+### What happens to a lost message outside of the message history?
+
+If a message was lost and never recovered, the message is considered permanently lost. Both the client and the server will lose their track of it, making the lost message unrecoverable.
+
+### How does the client detect that the server was killed?
+
+During the connection process, the client will mark the server as unreachable as soon as `SERVER_CONNECTION_TIMEOUT` is reached. This is made by the lack of `CONNECTION_REJECTED` or `CONNECTION_ACCEPTED` packet.
+
+If the server is killed while the client is connected, the client will mark the server as unreachable as soon as `SERVER_INACTIVITY_TIMEOUT` is reached. This is made by the lack of `HEARTBEAT_RECEIVED` packet.
