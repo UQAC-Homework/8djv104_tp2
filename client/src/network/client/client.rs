@@ -134,11 +134,6 @@ impl Client {
             message,
         };
         
-        if message_id == 3 || message_id == 4 {
-            log_debug!("Skipped message!");
-            return;
-        }
-
         self.transmit(&packet);
     }
 
