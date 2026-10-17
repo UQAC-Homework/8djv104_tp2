@@ -1,38 +1,30 @@
-#include <algorithm>
-#include <cmath>
 #include <iostream>
 #include <optional>
 
+#include "include/Logger.h"
+#include "include/Options.h"
 #include "include/network/Server.h"
-#include "include/network/SessionManager.h"
 
 int main(const int argc, char** argv)
 {
-	uint16_t port = 4000;
-
-	if (argc > 2)
-	{
-		std::cerr << "Usage: " << argv[0] << " [port]\n";
-		return 1;
-	}
-
-	if (argc == 2)
-	{
-		char* end = nullptr;
-		const long value = std::strtol(argv[1], &end, 10);
-
-		if (!end || *end != '\0' || value < 1 || value > 65535)
-		{
-			std::cerr << "Invalid port\n";
-			return 1;
-		}
-
-		port = static_cast<uint16_t>(value);
-	}
+	Options options;
 
 	try
 	{
-		Server server(port);
+		options = parse_options(argc, argv);
+	}
+	catch (const std::invalid_argument& e)
+	{
+		std::cerr << "Error: " << e.what() << "\n\n" << USAGE << "\n";
+		return 2;
+	}
+
+	Logger logger(std::cout, options.verbose);
+	LossSimulator lossSimulator(options.loss);
+
+	try
+	{
+		Server server(options.port, logger, lossSimulator);
 		server.run();
 	}
 	catch (const std::exception& e)

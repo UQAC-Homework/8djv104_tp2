@@ -3,6 +3,8 @@
 #include <memory>
 #include <ranges>
 
+constexpr auto INACTIVITY_TIMEOUT = std::chrono::seconds(3);
+
 void Session::refresh()
 {
 	lastPacket = std::chrono::steady_clock::now();

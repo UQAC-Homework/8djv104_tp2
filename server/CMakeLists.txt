@@ -20,4 +20,7 @@ add_executable(server
         source/network/SessionManager.cpp
         include/network/SessionManager.h
         source/network/Server.cpp
-        include/network/Server.h)
+        include/network/Server.h
+        include/Options.h
+        source/Options.cpp
+        include/LossSimulator.h)
