@@ -75,7 +75,7 @@ impl SendHistory {
     /// called *before* the first emission.
     pub fn record(&mut self, message: Message) -> u8 {
         let id = self.next_id;
-        self.slots[usize::from(id) % HISTORY_SIZE] = Some(Sent { id, message: message });
+        self.slots[usize::from(id) % HISTORY_SIZE] = Some(Sent { id, message });
         self.next_id = id.wrapping_add(1);
         self.sent = self.sent.saturating_add(1);
         id
@@ -118,8 +118,8 @@ impl SendHistory {
         }
 
         let depth = self.sent.min(HISTORY_SIZE as u64) as u8;
+
         (0..depth)
-            .rev() // oldest first
             .filter_map(|age| {
                 let id = last_sent.wrapping_sub(age);
 

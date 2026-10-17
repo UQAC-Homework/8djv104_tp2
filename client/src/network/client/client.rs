@@ -133,6 +133,11 @@ impl Client {
             message_identifier: message_id,
             message,
         };
+        
+        if message_id == 3 || message_id == 4 {
+            log_debug!("Skipped message!");
+            return;
+        }
 
         self.transmit(&packet);
     }
@@ -270,6 +275,7 @@ impl Client {
                 message: message.clone(),
             })
             .collect();
+
         for packet in &resend {
             self.transmit(packet);
         }
